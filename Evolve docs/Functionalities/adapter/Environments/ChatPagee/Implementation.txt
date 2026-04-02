@@ -1,0 +1,61 @@
+# Chat Page Environment – Adapter Implementation
+
+This file describes how the Chat Page environment's functionalities and constraints are solved in React.
+
+## Environment mapping
+
+- The Chat Page environment lives within the ChatPage component.
+- The lobby functionalities (conversation list, profile, logout) are handled by the ChatSidebar region.
+- On entering this environment, a RECENT_CHATROOM_REQUEST is sent to fetch available conversations.
+- A lobby-specific subscription handles: RECENT_CHATROOM_RESPONSE, ACTIVE_STATUS_RESPONSE, and the sidebar-update portion of MESSAGE_RESPONSE/MESSAGE_ACK_RESPONSE.
+
+## Selecting a conversation
+
+### Functionality
+- ChatSidebar renders the list of conversations using ChatListItem components.
+- Each ChatListItem is clickable and triggers a selection callback.
+- The selected conversation ID is passed up to ChatPage, which enables the Opened Chat environment.
+- Search: a search input allows filtering or querying for a specific peer by username.
+
+### Constraints enforced
+- Selection is only possible after the conversation list has loaded.
+- The active conversation is visually highlighted via the selected ID comparison.
+
+## Visual identity
+
+### Functionality
+- Profile images for the current user and each correspondent are fetched from the media server.
+- useMediaLoader hook manages avatar loading based on the current user and the chats list.
+- Avatars are distributed to components via ChatContext.
+
+### Constraints enforced
+- If an image fails to load, a fallback is rendered (first letter of the name with a generated color via avatarColor utility).
+- Image loading does not block the conversation list — avatars appear asynchronously.
+
+## Profile picture
+
+### Functionality
+- The user can upload a new profile image via the media server.
+- On successful upload, the avatar is refreshed.
+
+### Constraints enforced
+- Only image formats are accepted.
+- The updated image is reflected immediately after upload.
+
+## Logout
+
+### Functionality
+- A logout button in the ChatArea header triggers the onLogout callback.
+- App resets the current user and transitions back to the Auth environment.
+
+### Constraints enforced
+- Session state (chats, messages, active chat, media cache) is cleared on logout.
+
+## Components involved
+- ChatPage.jsx — environment orchestrator, context provider, holds selected chat ID
+- ChatSidebar.jsx — conversation list, search, user profile display
+- ChatListItem.jsx — individual conversation entry
+- ChatContext.jsx — distributes shared data (current user, avatars, media)
+- useMediaLoader.js — avatar and image fetching from media server
+- mediaServer.js — HTTP calls to the media server
+- dto.js — createChatRoomDTO()

@@ -1,0 +1,18 @@
+# Auth Environment – Constraints
+
+## Environment-level constraints
+
+- The user must not be able to access any other environment without successful authentication.
+- A connection to the server must be established before any authentication attempt can be made.
+- A session identity must be received from the server before login or account creation can proceed.
+
+## Per-functionality constraints
+
+### Login
+- Both username and password must be provided; empty fields must not be submitted.
+- The system must not reveal whether the username or the password was incorrect — only that authentication failed.
+
+### Account creation
+- Username must be unique; the system must reject duplicates.
+- Both username and password must meet minimum requirements before submission.
+- On failure, the user must remain on the creation form with their input preserved.

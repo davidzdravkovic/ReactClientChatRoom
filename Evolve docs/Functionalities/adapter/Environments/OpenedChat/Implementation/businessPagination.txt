@@ -1,0 +1,58 @@
+
+**Pagination Mechanism**
+
+Pagination is feature that allows the user to fetch messages by scrolling.
+
+*INITIATING THROUGH SCROLL*
+There are manual scrolling and auto scrolling
+
+##Auto scrolling is scrolling to the bottom on entering the chat and on receiving new messages or typing response IF the User is already near the bottom.
+
+*Merge Mode*
+
+Merge Mode is mechanism that allows the responses to be merged correctly in the state MESSAGES depending on the type of the load.
+There are 3 different load kinds:
+- initial
+- prepend
+- append
+
+The workflow starts with the user scrolling into the region that starts loading more history; at the moment the load is started, whether it is prepend or append is determined by older vs newer respectively. When the result arrives, that same classification must still be known so the MERGE MODE can be chosen correctly.
+
+The problem is that the user can start another load of a different kind before the previous one has finished, and when the result arrives the merge may follow the WRONG MERGE MODE.
+This can happen only across different kinds: in a short window prepend and append can both be started and the later one can replace what the merge step believes about the earlier one.
+
+Solution differs: performance-heavy options or simpler ones.
+Having in mind that this can rarely happen (user scrolling up and down fast many times), the simplest approach that does not hurt performance is preferred:
+that is: do not start another history load while one is already underway.
+
+Every conversation begins with loading allowed (nothing underway). Each outgoing load turns off further loading until that load completes; when the result is applied, loading is allowed again.
+This addresses the user starting two different kinds of load at once. For the same kind, the existing rule still applies: the anchor message id is compared every time; if it is the same as one already used, the duplicate is skipped, so two loads of the same kind cannot both be pending (the next one depends on the next anchor).
+
+The initial merge order can only be wrong when initial or other loads arrive as results from other conversations; those are discarded.
+
+*Ordering of the fetches*
+Ordering means history must stack correctly by message order, which MERGE MODE defines, and also by never having more than one load underway at the same time.
+
+The real problem on switching chats: the previous conversation may still have prepend, append, or even initial results on the way; if the user switches immediately, those results can arrive while another conversation is on screen. They are dropped when the conversation identity carried with the payload does not match the currently open conversation. #Later: empty prepend/append (zero messages) may carry no conversation identity to compare—needs a rule.#
+
+//CROSS CHAT FETCHING PROBLEM WITH STALE REQUESTS/RESPONSES
+Old conversation results can spill into a newly selected conversation under this design.
+
+- The previous conversation can have at most one load in progress; then the user can switch. Those late results are ignored unless they belong to the peer / conversation currently open.
+- If the user switches rapidly, many first-page loads for different conversations can pile up in transit (two loads for the same conversation at once still cannot happen).
+- The client cannot prepend or append until the first history load has returned, so an explicit “block until initial” flag is unnecessary—without anchors, those loads cannot be formed anyway.
+- The newly selected conversation may receive a burst of stale first-page or older/newer results; each arrival is validated against the currently open peer (identity may be checked before full conversation id is known), so a round trip can make a stale result look valid again.
+
+//THE PROBLEM BEHAVIOURS
+ so when he circles back to that one chat, the stale loads that were still in transit from the previous visit to that chat can now land where they match, here the possible scenarios are:
+  - For other batched loads that are not from the first visit or earlier visits to that same chat they are all rejected. 
+  - The stale result (initial or prepend/append) can arrive either before or after the initial result of the current visit; if before:
+     - stale results arrive before the fresh initial: the fresh initial replaces the stale regardless of kind (if slow, the user may notice—UI/UX). 
+  
+  - The stale results arrive after the fresh initial or after a newer prepend/append result, that means:
+     - stale results arrive after the fresh results, then stale results overwrite the fresh ones (correctness bug). A UI-only glitch is possible if:
+       - same kind of stale result for the same anchor overwrites the fresh one—often two initial loads, stale after fresh
+       - mixed kinds: stale prepend/append with a fresh initial yields jumbled or oddly ordered history; stale initial with fresh prepend/append can replace the whole thread; stale prepend/append with fresh prepend/append can scramble order.
+
+//SOLUTION
+#For this problem the solution is cross-conversation filtering applied before—or stricter than—matching the incoming load to the identity of the currently open conversation.#

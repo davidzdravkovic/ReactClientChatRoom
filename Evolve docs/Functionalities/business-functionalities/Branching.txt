@@ -1,0 +1,70 @@
+## Branching logic based on input ##
+
+Environments:
+
+**Log out / not authenticated**
+
+ Transition rules:
+  Entry: connection to the server must be established and a session identity must be received.
+  Exit: none (no state to clean).
+
+User has 2 inputs: login and create.
+ 
+ On success → navigate to the chat page.
+ On failure → show error message.
+ No side effects.
+
+
+**Chat page / profile**
+
+ Transition rules:
+  Entry side effects:
+   - Recent chats are needed.
+   - Optional: profile pictures for the current user and each correspondent.
+  Exit (logout): session state is cleared, transition back to authentication.
+
+User has 3 persistent inputs for the full session:
+- logout
+- select chat
+- update profile picture
+
+User has 1 persistent capability for the full session: receiving activities.
+ - They are: 
+   - messages
+   - typing
+   - activity status
+   - seen
+
+Recent chats must be loaded before selection is possible.
+After established, recent chats are updated with the persistent activities.
+
+On chat selected, receiving activities are handled differently based on whether they match the active chat:
+- If activity matches the active chat → update the conversation and update the recent chat.
+- If activity does not match the active chat → update just the recent chat.
+- If the activity does not match any recent chat → create a new recent chat entry.
+
+Chat can be opened either by selecting a recent chat or by searching the username of the peer.
+
+The searched chat can have outcomes:
+ - existing
+ - new
+ - wrong
+
+
+**Opened chat**
+
+ Transition rules:
+  Entry side effects:
+   - Initial message history is fetched for the selected conversation.
+   - Optional: if the last received message is from the correspondent, mark as seen.
+  Exit (deselect / navigate away): conversation state is cleared.
+  Internal transition (switching to a different chat): teardown the current chat state, then setup the new one (same as exit followed by entry).
+
+User has persistent inputs plus 5 new inputs:
+- pagination → older/newer messages loaded, no other effect 
+- sending message (text, emoji, image) → message appears immediately in conversation, sent to server, recent chat updated
+- fetching gallery images for that chat → gallery of images for this conversation is returned
+- typing → notification sent to server, no local change
+- seen → notification sent to server when viewing the correspondent's last message
+
+User inputs update the recent chats and are sent to the server.

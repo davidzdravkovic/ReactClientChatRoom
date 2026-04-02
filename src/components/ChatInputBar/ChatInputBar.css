@@ -1,0 +1,92 @@
+.chat-input-bar {
+  flex-shrink: 0;
+  padding: var(--space-4) var(--space-5);
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  border-top: 1px solid var(--border);
+  background: var(--bg-elevated);
+}
+
+.chat-input-bar-input {
+  flex: 1;
+  min-width: 0;
+  min-height: 44px;
+  padding: var(--space-3) var(--space-4);
+  font-size: 0.9375rem;
+  font-weight: 500;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-2xl);
+  background: var(--surface);
+  color: var(--text);
+  outline: none;
+  transition: border-color var(--duration-fast) var(--ease-out), box-shadow var(--duration-fast) var(--ease-out);
+}
+
+.chat-input-bar-input::placeholder {
+  color: var(--muted);
+}
+
+.chat-input-bar-input:focus,
+.chat-input-bar-input:focus-visible {
+  border-color: var(--accent);
+  box-shadow: var(--shadow-focus);
+}
+
+.chat-input-bar-btn {
+  width: 46px;
+  height: 46px;
+  min-width: 46px;
+  min-height: 46px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  background: var(--surface);
+  color: var(--text-secondary);
+  cursor: pointer;
+  transition: transform var(--duration-instant) var(--ease-out), color var(--duration-fast), border-color var(--duration-fast), background var(--duration-fast), box-shadow var(--duration-fast);
+  flex-shrink: 0;
+}
+
+.chat-input-bar-btn:hover {
+  color: var(--accent);
+  border-color: var(--border-strong);
+  background: var(--accent-soft);
+}
+
+.chat-input-bar-btn:active {
+  transform: scale(0.96);
+}
+
+.chat-input-bar-btn:focus-visible {
+  outline: none;
+  box-shadow: var(--shadow-focus);
+}
+
+.chat-input-bar-btn--secondary:active {
+  transform: scale(0.96);
+}
+
+.chat-input-bar-btn--send {
+  background: linear-gradient(135deg, var(--accent) 0%, var(--accent-hover) 100%);
+  border-color: transparent;
+  color: white;
+}
+
+.chat-input-bar-btn--send:hover {
+  filter: brightness(1.08);
+  box-shadow: var(--shadow-glow);
+}
+
+.chat-input-bar-btn--send:active {
+  transform: scale(0.96);
+  filter: brightness(1);
+}
+
+.chat-input-bar-icon {
+  width: 22px;
+  height: 22px;
+  pointer-events: none;
+}

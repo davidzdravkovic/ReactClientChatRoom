@@ -1,0 +1,83 @@
+---
+
+# Opened chat — state flow (Mermaid)
+
+Diagram derived from the flowchart: selection/search → recent match vs transition → initial fetch → active vs defined, plus message triggers and loop back to selection.
+
+```mermaid
+flowchart TB
+  subgraph states["States"]
+    S0["0 — initial: no active chat"]
+    S1["1 — Active chat"]
+    T0["0 — transition"]
+    D0["0 — defined"]
+  end
+
+  subgraph triggers1["Triggers"]
+    TR_SEL["Triggers: chat selection · search username"]
+  end
+
+  subgraph conditions1["Recent list"]
+    C_RECENT_T["Condition true: chat exists in recent"]
+    C_RECENT_F["Condition false: chat does not exist in recent"]
+  end
+
+  subgraph fetchPath["Resolve unknown peer"]
+    ACT_FETCH["Action: initial fetch issued"]
+    TR_FETCH["Triggers: initial fetch"]
+  end
+
+  subgraph conditions2["Initial fetch result"]
+    C_MSG_T["Condition true: messages exist"]
+    C_MSG_F["Condition false: no messages"]
+  end
+
+  subgraph activePath["While active"]
+    ACT_FETCH2["initial fetch issued"]
+    TR_FETCH2["Triggers: initial fetch"]
+  end
+
+  subgraph msgTriggers["Message activity"]
+    TR_MSG["Triggers: send message · receive message"]
+  end
+
+  S0 --> TR_SEL
+  TR_SEL --> C_RECENT_T
+  TR_SEL --> C_RECENT_F
+
+  C_RECENT_T --> S1
+
+  C_RECENT_F --> T0
+  T0 --> ACT_FETCH
+  ACT_FETCH --> TR_FETCH
+
+  TR_FETCH --> C_MSG_T
+  TR_FETCH --> C_MSG_F
+
+  C_MSG_T --> S1
+  C_MSG_F --> D0
+
+  S1 --> ACT_FETCH2
+  ACT_FETCH2 --> TR_FETCH2
+
+  S1 -.-> TR_MSG
+  TR_MSG --> D0
+
+  D0 --> TR_SEL
+```
+
+## Legend (aligns with diagram colors in source)
+
+| Tone in sketch | Role in Mermaid |
+|----------------|-----------------|
+| Green | Stable states: initial, active |
+| Yellow / orange | Transition / defined |
+| Red | Triggers (events) |
+| Blue / dark red | Branch conditions |
+| Brown | Actions (e.g. issue fetch) |
+
+## Notes
+
+- **Defined** (`0 — defined`): empty / new chat after fetch returned no messages; UI can differ from full **Active** until first send/receive or identity is confirmed.
+- **Loop** `D0 → TR_SEL`: user can leave defined/new flow and pick another chat or search again.
+- Second **initial fetch** under **Active** models refresh/re-entry while already active (as in the original chart).

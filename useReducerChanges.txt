@@ -1,0 +1,49 @@
+useReducer refactor — summary of changes
+========================================
+
+1. NEW FILE: src/reducers/chatReducer.js
+----------------------------------------
+- initialChatState: chats, messages, activeChat, galleryOpen, galleryMediaIds,
+  waitRecentChat, typingByChat, lastSeenMessageIdByChat, fullScreenImageUrl.
+- chatReducer handles:
+  RECENT_CHATROOM_RESPONSE     -> set chats, waitRecentChat
+  FETCH_MESSAGES_RESPONSE      -> merge messages (initial/prepend/append), lastSeen
+  FETCH_IMAGES_FOR_CHAT_RESPONSE -> galleryMediaIds, galleryOpen
+  TYPING_RESPONSE              -> typingByChat[chatRoomId]
+  TYPING_STALE_CLEAR           -> clear typing for chatRoomId
+  MESSAGE_ACK_RESPONSE / MESSAGE_RESPONSE -> update chats, messages (for activeChatId), clear typing
+  ACTIVE_STATUS_RESPONSE      -> chat online status (userName, status)
+  SEEN_RESPONSE                -> lastSeenMessageIdByChat[chatRoomId]
+  SELECT_ACTIVE_CHAT          -> activeChat
+  OPTIMISTIC_MESSAGE          -> append message to messages
+  CLOSE_GALLERY               -> galleryOpen false, galleryMediaIds []
+  SET_FULLSCREEN_IMAGE        -> fullScreenImageUrl
+  CLEAR_FULLSCREEN_IMAGE      -> fullScreenImageUrl null
+
+
+2. CHANGED: src/hooks/useChatSubscription.js
+--------------------------------------------
+- Old: took setChats, setMessages, setTypingByChat (and other args) and updated state directly.
+- New: takes (currentUser, dispatch, activeChatRef, pendingGalleryRef, typingTimeoutRef, fetchTypeRef).
+- No local state; parses WS messages and dispatches the matching action.
+- Passes mergeMode from fetchTypeRef for FETCH_MESSAGES_RESPONSE.
+- Passes activeChatId from activeChatRef for MESSAGE_ACK_RESPONSE / MESSAGE_RESPONSE.
+- Typing stale timeout dispatches TYPING_STALE_CLEAR with chatRoomId.
+
+
+3. CHANGED: src/pages/ChatPage/ChatPage.jsx
+-------------------------------------------
+- Replaced multiple useState with:
+  const [state, dispatch] = useReducer(chatReducer, initialChatState)
+  Destructure: chats, messages, activeChat, galleryOpen, galleryMediaIds,
+  waitRecentChat, typingByChat, lastSeenMessageIdByChat, fullScreenImageUrl.
+- useChatSubscription(currentUser, dispatch, activeChatRef, pendingGalleryRef,
+  typingTimeoutRef, fetchType) — no setState arguments.
+- Refs kept: activeChatRef, typingTimeoutRef, pendingGalleryRef, fetchType,
+  lastRequestedBeforeIdRef, lastRequestedNewerIdRef, lastSeenSentIdRef.
+- ChatSidebar onSelectChat: dispatch({ type: 'SELECT_ACTIVE_CHAT', payload: chat }).
+- handleMessageSent: dispatch({ type: 'OPTIMISTIC_MESSAGE', payload: { id, content, senderId, time, temporaryId } }).
+- Gallery onClose: dispatch({ type: 'CLOSE_GALLERY' }).
+- ChatContext onMessageImageClick: dispatch({ type: 'SET_FULLSCREEN_IMAGE', payload: url }).
+- ImageLightbox onClose: dispatch({ type: 'CLEAR_FULLSCREEN_IMAGE' }).
+- handleLoadOlder / handleLoadNewer unchanged logic; use state.messages (and refs) for pagination.

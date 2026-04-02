@@ -1,0 +1,63 @@
+
+## Transition implementation (maps to Branching.txt transition rules)
+
+### Application start → Auth environment
+
+- App.jsx mounts → useEffect calls connect() from wsConnection.js.
+- connect() opens the WebSocket to ws://localhost:12346/.
+- First incoming WS message is extracted as the session ID (4-byte LE uint32) and stored.
+- subscribeConnection() notifies LoginPage/SignUpPage that the session is ready.
+- Until the session ID is received, no DTO can be sent.
+
+### Auth → Chat Page (login/signup success)
+
+- LoginPage/SignUpPage subscribes to WS messages, listens for LOGIN_RESPONSE or creation response.
+- On success: calls onLogin(userData) callback → App.jsx sets currentUser state and page state to 'chat'.
+- React unmounts LoginPage/SignUpPage, mounts ChatPage.
+- ChatPage mount triggers:
+  - useEffect sends RECENT_CHATROOM_REQUEST via createChatRoomDTO() to fetch recent conversations.
+  - useMediaLoader begins fetching profile images for currentUser and correspondents.
+  - useChatSubscription registers WS listeners for all response types.
+  - ChatContext.Provider wraps child components with shared data.
+
+### Chat Page → Opened Chat (chat selected)
+
+- User clicks a ChatListItem → onSelectChat fires → ChatPage sets activeChat state.
+- activeChat changing triggers a useEffect:
+  - fetchType ref is reset to 'initial'.
+  - Pagination refs (lastRequestedBeforeIdRef, lastRequestedNewerIdRef) are reset to null.
+  - lastSeenSentIdRef is reset to null.
+  - FETCH_MESSAGES_REQUEST is sent via createChatRetieve() for the selected conversation.
+- ChatArea re-renders: ChatEmpty is replaced by ChatConversation + ChatInputBar.
+- ChatConversation mounts, wasNearBottom ref initializes to true.
+- When FETCH_MESSAGES_RESPONSE arrives, messages state is set (fetchType = 'initial' → replace).
+- useEffect in ChatConversation fires: scrolls to bottom, checks if seen notification should be sent.
+
+### Opened Chat → Opened Chat (switching chats / internal transition)
+
+- User selects a different chat → activeChat changes.
+- Same useEffect as entry fires:
+  - fetchType, pagination refs, and seen refs are all reset (teardown of old chat state).
+  - New FETCH_MESSAGES_REQUEST is sent for the new conversation.
+- Messages state is replaced when FETCH_MESSAGES_RESPONSE arrives (fetchType = 'initial').
+- ChatConversation does NOT remount (React reuses the instance) — refs like wasNearBottom keep their previous values. The atBottom check in the scroll useEffect compensates for this.
+
+### Opened Chat → Chat Page (deselecting chat)
+
+- activeChat is set to null.
+- ChatArea re-renders: ChatConversation + ChatInputBar are replaced by ChatEmpty.
+- ChatConversation unmounts — all its refs and effects are cleaned up.
+- Messages remain in state but are not displayed. They are replaced on next chat selection.
+
+### Chat Page → Auth (logout)
+
+- User clicks logout → onLogout callback fires in App.jsx.
+- App sets currentUser to null and page to 'login'.
+- React unmounts ChatPage entirely — all state (chats, messages, activeChat, gallery, media cache), hooks, subscriptions, and context are destroyed.
+- LoginPage mounts. WS connection remains open (connect() is not called again).
+
+### Auth → Auth (login/signup failure)
+
+- LOGIN_RESPONSE with failure status is received.
+- Error is displayed to the user.
+- No state changes, no navigation. User remains in the same environment.

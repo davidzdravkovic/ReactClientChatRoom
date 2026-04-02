@@ -1,0 +1,21 @@
+# File Purpose
+This file outlines the project development workflow.
+
+**Note:** The folders are organized in the order that reflects the actual development sequence.
+
+- **Description.txt** – Purpose of the documentation.
+- **ArchitecturewGuidelines.txt** - Development methodology and the design process pipeline.
+- **Functionalities** - Structured files that are defining the business logic on different levels of abstraction, following the methodology of "ArchitecturewGuidelines.txt".
+  - Directory structure from "Functionalities":
+    - Domain
+    - Entities
+    - Business-functionalities
+      - Branching
+      - Environments - Each environment has function descriptions and constraints.
+
+- **Adapter** - Directory where the specific implementation lies, gives answer to the business problems.
+   *Directory structure from Adapter is following the same structure of the business functionalities:
+    - General
+    - ModuleDesign
+    - Infrastructural-functionalities - Blueprint of what any adapter needs to provide, derived from business requirements.
+    - Environments - Specific implementation of the environment (structured by the need of how the framework/tool is solving the specific problem).

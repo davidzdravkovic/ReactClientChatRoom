@@ -1,0 +1,204 @@
+# Adapter – Module Design
+
+This file documents the structural design of the React codebase: what modules exist, what each is responsible for, and how they relate.
+
+---
+
+## Module map
+
+```
+src/
+  App.jsx                          [root]       Environment router, WS bootstrap
+  main.jsx                         [root]       React entry point, mounts App
+
+  network/
+    wsConnection.js                [network]    WebSocket lifecycle, send/subscribe API
+    mediaServer.js                 [network]    HTTP media fetching (profile images, message images)
+
+  Dto/
+    dto.js                         [dto]        Request factory functions for all WS operations
+
+  context/
+    ChatContext.jsx                [context]    Shared data provider within ChatPage boundary
+
+  hooks/
+    useChatSubscription.js         [hook]       WS response routing and state updates
+    useMediaLoader.js              [hook]       Avatar and message image loading lifecycle
+
+  pages/
+    LoginPage/LoginPage.jsx        [page]       Auth environment – login
+    SignUpPage/SignUpPage.jsx       [page]       Auth environment – account creation
+    ChatPage/ChatPage.jsx          [page]       Chat Page + Opened Chat environment orchestrator
+
+  components/
+    ChatSidebar/ChatSidebar.jsx    [component]  Conversation list, user profile, search
+    ChatListItem/ChatListItem.jsx  [component]  Single conversation entry in sidebar
+    ChatArea/ChatArea.jsx          [component]  Chat header, routes to empty or conversation
+    ChatConversation/...           [component]  Message list, scroll pagination, typing indicator
+    ChatInputBar/ChatInputBar.jsx  [component]  Text input, send, emoji, gallery trigger
+    MessageBubble/MessageBubble.jsx[component]  Single message rendering
+    ChatGallery/ChatGallery.jsx    [component]  Modal grid of conversation images
+    ChatEmpty/ChatEmpty.jsx        [component]  Placeholder when no chat is selected
+    ImageLightbox/ImageLightbox.jsx[component]  Full-screen image viewer
+
+  utils/
+    avatarColor.js                 [utility]    Deterministic color generation per username
+    formatTime.js                  [utility]    Timestamp formatting for display
+
+  styles/
+    index.css                      [styles]     Global styles
+```
+
+---
+
+## Module responsibilities
+
+### Network layer (depends on: nothing)
+
+The network layer is the lowest module. It has no knowledge of React, components, or state.
+
+**wsConnection.js** manages the WebSocket lifecycle:
+- connect() — opens the WS, handles session ID extraction from the first binary message
+- sendMessage(data) — sends a payload if the socket is open
+- subscribeMessages(callback) — registers a listener for all incoming messages after session ID
+- subscribeConnection(callback) — notifies when the session ID is ready
+- getSessionId() — returns the stored session ID
+
+**mediaServer.js** provides HTTP fetch functions:
+- fetchProfileImage(userId) — returns a blob URL for a profile picture or null
+- fetchMessageImage(mediaId) — returns a blob URL for a message attachment or null
+
+Both modules expose a functional API. They hold no React state. Any module can call them.
+
+### DTO layer (depends on: nothing)
+
+**dto.js** contains pure factory functions that produce request objects. Each function maps to one server request type:
+- createLogStruct → LOGIN_REQUEST
+- createCreateStruct → CREATE_REQUEST
+- createChatRoomDTO → RECENT_CHATROOM_REQUEST
+- createChatRetieve → FETCH_MESSAGES_REQUEST
+- createSendMessageStruct → MESSAGE_REQUEST
+- createTypingRequest → TYPING_REQUEST
+- createSeenDTO → SEEN_REQUEST
+- createFetchDTO → FETCH_IMAGES_FOR_CHAT_REQUEST
+
+All DTOs share the shape { SessionId, request, data }. The DTO layer has no side effects.
+
+### Hooks (depends on: network, dto)
+
+Hooks encapsulate stateful logic that components consume.
+
+**useChatSubscription** subscribes to wsConnection and routes incoming WS responses to state updates:
+- RECENT_CHATROOM_RESPONSE → setChats
+- FETCH_MESSAGES_RESPONSE → setMessages (with prepend/append/replace based on fetchType)
+- MESSAGE_RESPONSE / MESSAGE_ACK_RESPONSE → updates both chats (sidebar) and messages (conversation)
+- TYPING_RESPONSE → typingByChat state with stale timeout
+- ACTIVE_STATUS_RESPONSE → online/offline in chats
+- SEEN_RESPONSE → lastSeenMessageIdByChat
+- FETCH_IMAGES_FOR_CHAT_RESPONSE → gallery media IDs
+
+Currently this is a single monolithic hook serving both lobby and active-chat environments. The design intent is to split it into environment-specific subscriptions.
+
+**useMediaLoader** manages image loading lifecycle:
+- Fetches the current user's avatar on mount
+- Fetches correspondent avatars when chats list changes
+- Auto-loads message images when messages change
+- Exposes loadMessageImage for on-demand loading
+- Manages blob URL lifecycle (creation and revocation)
+
+### Context (depends on: nothing directly, provided by page)
+
+**ChatContext** distributes shared data within the ChatPage boundary:
+- currentUser
+- avatarByUserId
+- messageImageByMediaId
+- loadingMediaIds
+- loadMessageImage
+- onMessageImageClick
+
+Components inside ChatPage access this via useChatContext() instead of prop drilling. Components outside ChatPage (LoginPage, SignUpPage) do not have access.
+
+### Pages (depends on: hooks, network, dto, context, components)
+
+Pages are environment orchestrators. They set up infrastructure, manage environment-level state, and compose components.
+
+**App.jsx** is the root:
+- Calls connect() on mount to establish WS
+- Owns page state (login/signup/chat) and currentUser
+- Routes to the correct page component
+- Guards: redirects to login if chat is accessed without a user
+
+**LoginPage** handles the login flow:
+- Subscribes to connection readiness
+- On submit, constructs LOGIN_REQUEST DTO and sends via WS
+- Subscribes to messages, listens for LOGIN_RESPONSE
+- On success, calls onLogin callback which App uses to transition
+
+**SignUpPage** handles account creation (currently incomplete — form exists but is not wired to backend).
+
+**ChatPage** orchestrates the lobby and active-chat environments:
+- Provides ChatContext
+- Sends RECENT_CHATROOM_REQUEST on mount
+- Owns activeChat selection state (the bridge between lobby and opened chat)
+- Hosts useChatSubscription and useMediaLoader
+- Passes environment-specific data and callbacks down to components
+
+### Components (depends on: context, utils)
+
+Components are the rendering layer. They receive data and callbacks; they do not directly call the network layer or construct DTOs.
+
+**Sidebar region (lobby environment):**
+- ChatSidebar — renders the conversation list, search input, user profile
+- ChatListItem — renders one conversation entry, highlights if active
+
+**Chat area region (opened chat environment):**
+- ChatArea — renders the header (correspondent info, logout), routes to ChatEmpty or conversation
+- ChatConversation — renders the message list, handles scroll for pagination, displays typing indicator
+- ChatInputBar — text input, submit handler, constructs and sends MESSAGE_REQUEST DTO, triggers typing notifications
+- MessageBubble — renders a single message (text, image, time, seen indicator)
+
+**Modals:**
+- ChatGallery — modal overlay showing all images for a conversation
+- ImageLightbox — full-screen single image viewer
+
+**Exception:** ChatInputBar directly imports dto.js and wsConnection to construct and send messages. This is the one component that bypasses the page orchestrator for sending.
+
+### Utilities (depends on: nothing)
+
+- avatarColor.js — generates a deterministic background/border color pair from a username string
+- formatTime.js — formats timestamps for display in message bubbles and sidebar
+
+---
+
+## Dependency direction
+
+```
+  utils ←── components ←── pages ←── App
+                ↑              ↑
+             context        hooks
+                            ↑   ↑
+                        network  dto
+```
+
+The general rule: dependencies flow upward. Lower modules have no knowledge of higher ones.
+- network and dto know nothing about React
+- hooks know about network and dto, not about specific components
+- context is a data channel, not a dependency — it's provided by pages, consumed by components
+- components know about context and utils, not about network directly (with the ChatInputBar exception noted above)
+- pages compose everything together
+
+---
+
+## Environment ownership (current vs intended)
+
+| Concern | Currently owned by | Intended owner |
+|---------|-------------------|----------------|
+| chats (conversation list) | ChatPage | ChatSidebar (lobby) |
+| activeChat selection | ChatPage | ChatPage (transition state, stays here) |
+| messages | ChatPage | ChatArea (active chat) |
+| pagination refs | ChatPage | ChatArea (active chat) |
+| seen refs | ChatPage | ChatArea (active chat) |
+| typing state | useChatSubscription | active-chat subscription |
+| WS response routing | useChatSubscription (monolithic) | split into lobby + active-chat subscriptions |
+| avatar loading | useMediaLoader (in ChatPage) | could split: user avatar in sidebar, message images in chat area |
+| gallery state | ChatPage | ChatArea (active chat) |

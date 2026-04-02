@@ -1,0 +1,104 @@
+# Opened Chat Environment – Adapter Implementation
+
+This file describes how the Opened Chat environment's functionalities and constraints are solved in React.
+
+## Environment mapping
+
+- The Opened Chat environment activates within ChatPage when a conversation is selected (activeChat is set).
+- The chat area region (ChatArea, ChatConversation, ChatInputBar) renders the active conversation.
+- On entering this environment, a FETCH_MESSAGES_REQUEST is sent to retrieve the conversation history.
+- An active-chat-specific subscription handles: FETCH_MESSAGES_RESPONSE, TYPING_RESPONSE, SEEN_RESPONSE, FETCH_IMAGES_FOR_CHAT_RESPONSE, and the message-update portion of MESSAGE_RESPONSE/MESSAGE_ACK_RESPONSE.
+
+## Sending a message
+
+### Functionality
+- ChatInputBar renders a text input and submit button.
+- On submit, a MESSAGE_REQUEST DTO is constructed and sent over WebSocket.
+- A temporary message is immediately added to the messages list (optimistic display) with a temporaryId.
+- When MESSAGE_ACK_RESPONSE arrives, the temporary message is replaced with the server-confirmed version.
+
+### Constraints enforced
+- Empty messages are prevented from submission.
+- Optimistic entry uses a temporaryId; the ACK matches and replaces it by that ID.
+- If the server rejects, the optimistic entry should be marked or removed.
+- Image sending requires upload to the media server before the message DTO is sent.
+
+## Receiving messages
+
+### Functionality
+- MESSAGE_RESPONSE from the server triggers adding the new message to the messages list.
+- If the message has a temporaryId matching an existing optimistic entry, it replaces rather than duplicates.
+
+### Constraints enforced
+- Duplicate prevention: messages with a matching temporaryId replace rather than append.
+- Messages only appear if they belong to the currently active conversation (chatRoomId match).
+
+## Pagination
+
+### Functionality
+- ChatConversation detects scroll position to trigger loading older or newer messages.
+- handleLoadOlder sends a FETCH_MESSAGES_REQUEST with the oldest message ID as the beforeId.
+- handleLoadNewer sends a FETCH_MESSAGES_REQUEST with the newest confirmed message ID as the afterId.
+- fetchType ref tracks whether incoming messages should prepend, append, or replace.
+
+### Constraints enforced
+- lastRequestedBeforeIdRef / lastRequestedNewerIdRef prevent duplicate requests for the same page.
+- Prepended messages do not disrupt the current scroll position (handled by ChatConversation scroll logic).
+
+### Scroll triggering and merge wiring (implementation)
+
+- Auto scrolling is disabled when making fetch calls (append), because that sets the reference triggerScrollPos to false.
+
+- Manual scrolling fires on every scroll a function that:
+  - Checks if the scroll is in the fetching/triggering zone or neutral.
+  - If neutral: enables the fetching mechanism by setting the reference triggerScrollPos to true, then returns.
+  - If not neutral: first checks whether the fetching mechanism is enabled (triggerScrollPos is true); only then checks which trigger zone TOP or BOTTOM.
+  - On every enter into a triggering zone: the fetch mechanism is disabled by setting triggerScrollPos to false; NEWER/OLDER callback is called; on bottom zone SEEN callback is called.
+
+- The functions called from the trigger zone (NEWER/OLDER) first check fetch in flight. That prevents overwriting the fetch type (important for merge mode — see Pagination.txt).
+
+- On creating a request, fetchType is set to prepend/append based on OLDER/NEWER respectively. The response handler reads fetchType from that reference to decide merge mode (policy: Pagination.txt).
+
+- inFlight / “disable fetch while one is in flight” is implemented on the request and response path as described in Pagination.txt.
+
+## Seen status
+
+### Functionality
+- When the user views the correspondent's latest message, a SEEN_REQUEST DTO is sent.
+- SEEN_RESPONSE updates lastSeenMessageIdByChat, which ChatConversation uses to show read indicators.
+
+### Constraints enforced
+- lastSeenSentIdRef ensures the same seen notification is not sent twice for the same message.
+- The seen indicator updates per chatRoomId so switching chats shows correct status.
+
+## Typing indicator
+
+### Functionality
+- ChatInputBar sends a TYPING_REQUEST on keystrokes (debounced).
+- TYPING_RESPONSE from the server updates typingByChat state.
+- ChatConversation displays a typing indicator when typingByChat has an active entry for the current chat.
+
+### Constraints enforced
+- A timeout (TYPING_STALE_MS = 5000ms) clears the typing indicator if no further typing event arrives.
+- typingTimeoutRef per chatRoomId manages the stale cleanup.
+
+## Gallery
+
+### Functionality
+- A gallery button in ChatArea triggers a FETCH_IMAGES_FOR_CHAT_REQUEST.
+- FETCH_IMAGES_FOR_CHAT_RESPONSE returns media IDs, which ChatGallery renders.
+- Each image can be clicked to open ImageLightbox for full-screen viewing.
+
+### Constraints enforced
+- pendingGalleryRef prevents processing gallery responses that were not requested.
+- Gallery only shows images for the active conversation (request includes chatRoomId).
+- Closing the lightbox returns to the gallery or conversation without losing state.
+
+## Components involved
+- ChatArea.jsx — chat header, routes to ChatEmpty or ChatConversation + ChatInputBar
+- ChatConversation.jsx — message list, scroll-based pagination, typing indicator display
+- ChatInputBar.jsx — text input, submit, emoji button, gallery button, typing notification
+- MessageBubble.jsx — individual message rendering (text, image, time, seen status)
+- ChatGallery.jsx — modal grid of conversation images
+- ImageLightbox.jsx — full-screen image viewer
+- dto.js — createChatRetieve(), createSendMessageStruct(), createTypingRequest(), createSeenDTO(), createFetchDTO()

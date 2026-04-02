@@ -1,0 +1,26 @@
+# Chat Page Environment – Constraints
+
+## Environment-level constraints
+
+- The user must be authenticated before entering this environment.
+- Recent conversations must be retrieved before the user can select a chat.
+- The user must remain in this environment until they either select a chat or log out.
+- Incoming activities from other users must be reflected without requiring user action.
+
+## Per-functionality constraints
+
+### Selecting a conversation
+- A conversation cannot be opened until the conversation list has been loaded.
+- The currently selected conversation must be visually distinguishable from the rest.
+
+### Visual identity
+- If a profile image fails to load, a fallback representation must be shown (e.g. initials, placeholder).
+- Images must not block the loading of the conversation list.
+
+### Profile picture
+- Only image formats should be accepted for upload.
+- The updated picture must be reflected immediately after a successful upload.
+
+### Logout
+- Logging out must transition the user back to the authentication environment.
+- Any active session state must be cleared on logout.

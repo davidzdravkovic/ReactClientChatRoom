@@ -1,0 +1,38 @@
+/* Grid layout: sidebar | divider | main */
+.chat-page {
+  position: relative;
+  z-index: 1;
+  background: var(--bg);
+  display: grid;
+  grid-template-columns: 320px 1px 1fr;
+  grid-template-rows: 1fr;
+  height: 100vh;
+  min-height: 100vh;
+  max-height: 100vh;
+  overflow: hidden;
+}
+
+.chat-page-sidebar-wrap {
+  min-width: 0;
+  overflow: hidden;
+  height: 100%;
+}
+
+.chat-page-main-wrap {
+  min-width: 0;
+  min-height: 0;
+  overflow: hidden;
+  height: 100%;
+}
+
+.chat-page-divider {
+  width: 1px;
+  background: linear-gradient(
+    180deg,
+    transparent 0%,
+    var(--border) 20%,
+    var(--border) 80%,
+    transparent 100%
+  );
+  opacity: 0.9;
+}

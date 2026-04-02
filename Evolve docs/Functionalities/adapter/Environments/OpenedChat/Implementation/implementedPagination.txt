@@ -1,0 +1,49 @@
+**Pagination (implementation)**
+
+1.Step initiating fetch call.
+Pagination is starting always with the user scrolling.
+The div container where the message components are filed in is a ScrollRef.
+Every user scroll  activity on this element is calling a function, onSroll.
+OnScroll  function  goal is to call functions for making a requests, request for older messages or new messages with seen request.
+But this conditions needs to be met:
+ - The scroll element needs to be in the area where is fetchable and that is for older messages:  ScrollRef < 100 pixels from TOP or for new messages: scrollRef < 100 pixels from BOTTOM.
+ - The user is able to move in that range of 100 pixels calling each time onScroll function with the right condition making many fetches with just one really intended.
+ - In purpose one achieving situaion where entering in that zone = one fetch call, triggerScrollPos is a guard that is changing based on zone. Neutral zone is enabling this guard and fetchable zone is disabling.
+ 
+There is autoscrolling useEffect that has a goal on first entering the chat or message or typing change if the user is near the bottom the scroll to go in the zone of fetchable for newer.
+But to prevent fetches for this kind of scrolling the guard triggerScrollPos is set to false, which onScroll function will return.
+
+For both autoscrolling or manual scrolling on bottom (for manual if criteria is met) onSeen function call is made.
+
+2.Step calling the functions.
+The functions are called onBefore and onAfter they are both useCallbacks:
+ - They are using MESSAGES state to create the request, on they executing both needs to use the most current MESSAGES state, for that reason in dependency array they depenend on MESSAGES state.
+ - They are depended on the MESSAGES state, they do not check if the MESSAGES state is storing messages for that chat (that constraint is imposed on different place, but for correctness both functions MUST operate/create request on messages from the active current chat).
+The goal of both functions onAfter and onBefore is to create a request and sent to the server.
+The request is contained of: peer username, limit of messages, message id's coordinates and echoed identifier for a chat.
+
+For both functions to sent the request this is needed:
+
+- MESSAGES state must not be empty.
+- The coordinate message id must never be sent before for this chat session for that reason:
+   - lastRequestedBeforeIdRef is holding the last sent message id, and on every call onBefore the last message id  from MESSAGES state is compared with this reference.
+   - lastRequestedNewerIdRef  is holding the last sent message id, and on every call onNewer the first message id from MESSAGES state is compared with this reference.
+- If the message from the MESSAGES state is not equal but less then the message id holded by the reference than this condition is passed and the message id from the MESSAGE state is now the new reference in the future to be compared with.
+*This constraint is saving the program of redundent sending same request over and over, also is making for one chat session only one of the same type request to be in Flight.
+
+ - In frame of one chat session for correct  ordering messages the fetch type needs to be conserved from the moment of setting (by creating the request) till -> moment of receiving the response.
+ - Arrived response needs to read the same fetch type setted at the moment when that response was inititated by the request.
+ - That means only one request can be inflight at a time in one chat session, so this needs to be constrainted with a reference inFlightFetchRef that is true if there is request for which there is no response.
+ - Eventually if all condition are passed: no empty messages, no redundant sendings to server and no current inFlightFetchRef request the fetch type is set prepend/append for onBefore/onNewer respectively.
+
+3.Step receiving the response.
+
+The response is rejected if there is no for that chat session is compared with the current conversationEpochRef, if is equal the MESSAGE state is updated the last seen by other if any and the inFlightFetchRef is set to false making a new request available.
+
+##Overview. 
+User triggers with scroll behavior a fetch call, the result is a response that modifies the MESSAGE state and the CHAT_CONVERSATION is using.
+
+ 
+
+
+

@@ -1,0 +1,5 @@
+# The entities are for this application are derived from the domain purpose.
+
+-User
+-Messages
+-Chat

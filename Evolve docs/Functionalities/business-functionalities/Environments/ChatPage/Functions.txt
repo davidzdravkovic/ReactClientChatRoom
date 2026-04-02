@@ -1,0 +1,24 @@
+# Chat Page Environment – Business Functionalities
+
+This file documents the set of functionalities available in the Chat Page environment.
+
+## Purpose
+
+The Chat Page environment enables the client to select a conversation or to log out.
+
+## Functionalities
+
+1. **Selecting a conversation**
+   - In order for a chat to be selected, the user must be presented with their available conversations.
+   - The user must also be able to find a specific peer by username.
+   - To enable selection, recent conversations must be retrieved from the server upon entering this environment.
+
+2. **Visual identity**
+   - Each conversation and the user themselves require visual identity through profile images.
+   - Images must be fetched to represent both the current user's avatar and each correspondent's avatar.
+
+3. **Profile picture**
+   - The user should be able to upload an image as a profile picture.
+
+4. **Logout**
+   - The user can end the session and transition back to the authentication environment.

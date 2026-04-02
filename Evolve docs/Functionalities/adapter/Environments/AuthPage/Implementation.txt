@@ -1,0 +1,43 @@
+# Auth Environment – Adapter Implementation
+
+This file describes how the Auth environment's functionalities and constraints are solved in React.
+
+## Environment mapping
+
+- The Auth environment is represented by two page components: LoginPage and SignUpPage.
+- Navigation between them is handled by page state in the root App component.
+- The WebSocket connection is established at App mount, before either page renders.
+- The session ID is received and stored before any authentication request can be sent.
+
+## Login
+
+### Functionality
+- LoginPage renders a form with username and password fields.
+- On submit, a LOGIN_REQUEST DTO is constructed and sent over WebSocket.
+- A message subscription listens for LOGIN_RESPONSE.
+- On success, the App transitions to the Chat Page environment by setting the current user and switching the page state.
+
+### Constraints enforced
+- Empty fields: form validation prevents submission with empty username or password.
+- Error feedback: LOGIN_RESPONSE with failure status displays an error to the user.
+- No information leakage: the error message does not distinguish between wrong username and wrong password.
+
+## Account creation
+
+### Functionality
+- SignUpPage renders a form with the required fields.
+- On submit, a CREATE_REQUEST DTO is constructed and sent over WebSocket.
+- A message subscription listens for the creation response.
+- On success, the App transitions to the Chat Page environment.
+
+### Constraints enforced
+- Unique username: the server rejects duplicates; the response error is displayed to the user.
+- Minimum requirements: client-side validation before submission.
+- Input preservation: on failure, the form retains the user's input.
+
+## Components involved
+- App.jsx — owns page state, establishes WS connection
+- LoginPage.jsx — login form, subscription to LOGIN_RESPONSE
+- SignUpPage.jsx — signup form, subscription to creation response
+- wsConnection.js — connect(), sendMessage(), subscribeConnection(), subscribeMessages()
+- dto.js — createLogStruct(), createCreateStruct()

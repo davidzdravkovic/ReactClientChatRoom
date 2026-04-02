@@ -1,0 +1,23 @@
+# Auth Environment – Business Functionalities
+
+This file documents the set of functionalities available in the Authentication environment.
+
+## Purpose
+
+The Auth environment enables a non-authenticated user to gain access to the application.
+
+## Functionalities
+
+1. **Login**
+   - The user must be able to authenticate with existing credentials.
+   - On success, the user transitions to the Chat Page environment.
+   - On failure, the user is informed of the error and remains in this environment.
+
+2. **Account creation**
+   - The user must be able to create a new account.
+   - On success, the user transitions to the Chat Page environment.
+   - On failure, the user is informed of the reason (e.g. username already taken) and remains in this environment.
+
+## Side effects
+
+None. No background activity occurs in this environment.

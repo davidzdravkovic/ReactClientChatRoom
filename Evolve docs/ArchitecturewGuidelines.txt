@@ -1,0 +1,79 @@
+# Defining the domain/core of the application**
+  
+ - What problem is this application solving.
+
+
+1. **First step is to define the soild structures that are solving this problem**
+   
+ - Solid structures are entites that have identity, they are the foundation of the application.
+
+
+2. **From entities we can think about behavior between them as functionalities**
+ 
+  -  Functionalities in any project can generally be divided into two categories:  
+    2.1. Business functionalities – The core requirements of the application; what the app is fundamentally meant to do.  
+    2.2. Infrastructural functionalities – Technical and supporting elements that exist to serve the business core.
+ 
+ The project should start by resolving the **business functionalities**. These are essentially the requirements of the app. Infrastructural components are    
+ designed afterward, bending to the needs of the business core.
+
+# Starting with the business
+  
+
+1. **Recognition** – Identify and categorize all functionalities.
+
+  - Business functionalities can be divided into:
+     - **Pure business functionalities** 
+     - **Utility functionalities**
+       - **Security** – Authentication, authorization, encryption, audit trails.  
+       - **Monitoring** – Logging, system health tracking, performance metrics.  
+       - **Error handling** – Generic or reusable error management for system stability.
+
+     
+2. **Process of describing the functionalities by principe of branching**
+  
+    - The principle of branching is describing what is enabled and what is disabled base on user input or side effect.
+    - The functionalities are going to be described as branching system, they are going to be grouped in more general view.
+    - From the general view the dependencies can be viewed as a branching system and how those grouped activities work integrated.
+3. **Already defined branching points then constrains can be defined for the broad group of functionalities**
+ 
+    - Defining each branch as having transitions, and by it the constrains.
+
+4. **Eventually designing the endpoint itself**
+ 
+   - Having in advance the more general view the endpoint can be defined within the system.
+
+5. **Finding the level at functionalities at which the system needs to be thinked about**
+ 
+     - Starting by the most general states/environments at which the app can be found.
+     - Destructing in that environment the set of functionalities.
+     - So the system needs to be seen in different levels of view starting from the most broader.
+
+6. **Binding the functionalities with the things they carry**
+
+     - Describing invariants, constains.
+     - The system needs to start from non specific technical description to the adapter which is the specific.
+     - The adapter the actual implementation needs to be decoupled by the design of the project, so later can be easily changed.
+
+7. **At the right level of functions view the docs we contain uniform style**
+  
+    - Rigth level of view requirements has a separate folder, with its utilities, infra functionalities, and the actual implementation with the framework   
+      specific.
+
+8. **The implementation of the adapter/framework**
+
+
+    - This needs its own way of structuring that is describing at certain level the specific framework solution to the business logic
+
+ 
+
+  
+    
+ 
+
+
+
+      
+    
+     
+

@@ -1,0 +1,164 @@
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+}
+
+/* ─── Design system: elegant, cohesive ─── */
+:root {
+  /* Surfaces – soft dark, refined */
+  --bg: #0d0f14;
+  --bg-elevated: #13161d;
+  --bg-overlay: #181c24;
+  --surface: #1a1e28;
+  --surface-2: #1f242e;
+  --surface-hover: #232934;
+  --border: rgba(255, 255, 255, 0.06);
+  --border-strong: rgba(255, 255, 255, 0.09);
+  --border-focus: rgba(99, 102, 241, 0.4);
+
+  /* Text – warm neutrals */
+  --text: #eef1f5;
+  --text-secondary: #8f97a6;
+  --text-tertiary: #5c6370;
+  --muted: #5c6370;
+
+  /* Brand & semantic – elegant accent, soft green for online */
+  --accent: #6366f1;
+  --accent-hover: #7c7ff7;
+  --accent-soft: rgba(99, 102, 241, 0.1);
+  --accent-strong: rgba(99, 102, 241, 0.22);
+  --online: #16a34a;
+  --accent-2: #16a34a;
+  --accent-2-soft: rgba(22, 163, 74, 0.12);
+  --danger: #dc2626;
+  --danger-soft: rgba(220, 38, 38, 0.1);
+  --success: #16a34a;
+  --warning: #d97706;
+
+  /* Spacing scale (4px base) */
+  --space-1: 4px;
+  --space-2: 8px;
+  --space-3: 12px;
+  --space-4: 16px;
+  --space-5: 20px;
+  --space-6: 24px;
+  --space-8: 32px;
+  --space-10: 40px;
+
+  /* Radii */
+  --radius: 12px;
+  --radius-sm: 8px;
+  --radius-lg: 16px;
+  --radius-xl: 20px;
+  --radius-2xl: 24px;
+  --radius-full: 9999px;
+
+  /* Shadows & elevation */
+  --shadow-xs: 0 1px 2px rgba(0, 0, 0, 0.2);
+  --shadow-sm: 0 2px 8px rgba(0, 0, 0, 0.22), 0 0 1px rgba(0, 0, 0, 0.15);
+  --shadow-md: 0 4px 16px rgba(0, 0, 0, 0.25), 0 0 1px rgba(0, 0, 0, 0.2);
+  --shadow-lg: 0 8px 32px rgba(0, 0, 0, 0.3);
+  --shadow-glow: 0 0 0 1px var(--accent-strong), 0 0 20px rgba(99, 102, 241, 0.15);
+  --shadow-focus: 0 0 0 3px var(--accent-soft);
+
+  /* Motion */
+  --ease-out: cubic-bezier(0.22, 1, 0.36, 1);
+  --ease-in-out: cubic-bezier(0.65, 0, 0.35, 1);
+  --ease-spring: cubic-bezier(0.34, 1.56, 0.64, 1);
+  --duration-instant: 0.1s;
+  --duration-fast: 0.15s;
+  --duration-normal: 0.25s;
+  --duration-slow: 0.35s;
+}
+
+/* Reduced motion: respect user preference */
+@media (prefers-reduced-motion: reduce) {
+  :root {
+    --duration-instant: 0s;
+    --duration-fast: 0s;
+    --duration-normal: 0.01s;
+    --duration-slow: 0.01s;
+  }
+  *, *::before, *::after {
+    animation-duration: 0.01s !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01s !important;
+  }
+}
+
+html {
+  font-size: 16px;
+  -webkit-tap-highlight-color: transparent;
+}
+
+html,
+body {
+  width: 100%;
+  height: 100%;
+  margin: 0;
+  overflow: hidden;
+}
+
+#root {
+  width: 100%;
+  height: 100%;
+  display: block;
+}
+
+.app-chat-wrapper {
+  width: 100%;
+  height: 100%;
+  min-height: 100vh;
+  min-width: 100%;
+  display: block;
+  overflow: hidden;
+}
+
+body {
+  font-family: "Plus Jakarta Sans", -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  font-size: 0.9375rem;
+  line-height: 1.5;
+  background: var(--bg);
+  color: var(--text);
+  min-height: 100%;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+/* Focus ring: keyboard-only, high contrast */
+.focus-ring:focus {
+  outline: none;
+}
+.focus-ring:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+
+/* Selection: on-brand and readable */
+::selection {
+  background: var(--accent-soft);
+  color: var(--text);
+}
+
+/* Ambient background */
+.bg-dynamic {
+  position: relative;
+  min-height: 100%;
+}
+
+.bg-dynamic::before {
+  content: "";
+  position: fixed;
+  inset: 0;
+  z-index: 0;
+  pointer-events: none;
+  background:
+    radial-gradient(ellipse 70% 40% at 15% 15%, rgba(99, 102, 241, 0.06), transparent 45%),
+    radial-gradient(ellipse 50% 60% at 88% 85%, rgba(34, 197, 94, 0.04), transparent 45%);
+}
+
+.app-chat-wrapper {
+  position: relative;
+  z-index: 1;
+}

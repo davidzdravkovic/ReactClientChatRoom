@@ -1,0 +1,11 @@
+# Purpose of this directory
+
+Its main goal is to define the system requirements at the correct level of abstraction through a process of derivation from the domain and business logic.
+
+The descriptions are intentionally technology-agnostic so that implementation details, frameworks, or infrastructure can be added or changed later without affecting the core design.
+
+This separation helps keep concerns decoupled and allows the documentation to act as a navigation system while developing the project.
+ 
+In addition of that this can be thinked as a 2 different parts finding on the right abstraction, the general documentation which purpose is to define, structure
+the requriements by decoupling them, and the other documentation is the implementation  of the specific answers to those requirements following the same structure imposed by the requirmenets.
+

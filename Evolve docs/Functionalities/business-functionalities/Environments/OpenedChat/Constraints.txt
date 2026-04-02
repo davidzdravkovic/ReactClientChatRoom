@@ -1,0 +1,36 @@
+# Opened Chat Environment – Constraints
+
+## Environment-level constraints
+
+- A conversation must be selected before this environment is entered.
+- All Chat Page environment functionalities remain active alongside the ones in this environment.
+- Messages must be displayed in chronological order at all times.
+
+## Per-functionality constraints
+
+### Sending a message
+- An empty message must not be submitted.
+- The message must appear in the conversation immediately before server confirmation (optimistic display).
+- If the server rejects the message, the optimistic entry must be visually marked or removed.
+- Sending an image requires the image to be uploaded before the message is submitted.
+
+### Receiving messages
+- A message from the correspondent must appear in real time without requiring the user to refresh or act.
+- Duplicate messages must not be displayed (e.g. if the same message arrives via multiple response types).
+
+### Pagination
+- Loading older messages must not disrupt the user's current scroll position.
+- The same page of messages must not be requested twice.
+- If there are no more older messages, the system must stop requesting.
+
+### Seen status
+- A seen notification must only be sent once per message — not on every view.
+- The seen indicator must update when the correspondent reads a new message.
+
+### Typing indicator
+- The typing indicator must disappear after a timeout if no further typing occurs.
+- The user's own typing must not trigger their own indicator.
+
+### Gallery
+- The gallery must only show images belonging to the currently opened conversation.
+- Full-screen view must be dismissible without losing the conversation state.

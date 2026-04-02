@@ -1,0 +1,122 @@
+#Active chat as a state machine
+
+1.Step of making an ACTIVECHAT
+On first mount a use effect runs sending request to fetch RECENT CHATROOMS, all existing chatrooms.
+One CHATROOM contains:
+1.Other user id.
+2.Other username.
+3.Chat room id.
+4.Last message.
+5.Time of the last message.
+6.Activity status 
+On received chat the user id is taken for fetching the profile picture.
+
+ACTIVECHAT with all fields can be be obtained directly by:
+1. Selecting a chat existing chat from LEFTSIDEBAR.
+2. Writing the username and matching the chat from the LEFTSIDEBAR.
+3. From transitioning chat on receiving a initial fetch.
+4. Sending a message.
+5. Receiving a message.
+
+
+**Full ACTIVECHAT app state**
+The LEFTSIDEBAR is consuming:
+Other user id, other username, last messages, activity status, chatroom id as key in the list.
+
+The CHATAREA is consuming:
+Other user id, other username, activity status.
+
+THE CHATCONVERSATION is consuming only if ACTIVECHAT is true:
+Other username, avatar derived from messages other user id
+
+The INPUTBAR is consuming:
+Other username, chat room id
+
+
+** Search bar selecting a chat **
+*Deciding the trigger point that decides the type of the ACTIVECHAT*
+ACTIVECHAT can be set also just with the username of the peer.
+Meaning if there is already existing chat from RECENT CHATROOMS response, that chat is going to be set as it.
+But if there is no chat with that username, new existing chat is opened and now is Active. - So with this design the source of truth is RECENT CHATROOMS response.
+
+Caveates of this design is that RECENT CHATROOMS response can return:
+-malformed response not the full list
+-returned nothing/network problem
+
+That means the user opening a chat that already exists can get new existing chat which is not.
+The source of true can also be on fetching initial if it returns 0 message - no existing chat with that peer.
+
+The caveats besides of network and server responses, here are that the chat is not known which type is it, existing or none existing before the initial response arrives.
+*In this frame from opening to  receiving first initial i need to think about what are the user capabilities at that moment! - sending messages is not one of them
+
+Later the RECENT CHATROOM response is going to return like the pagination meaning at one moment all of the chats are not going to be at the client side, so for that reason the more reliable desicion here is the initial fetch to decide the type.
+*CONCLUSION the source of the truth needs to be initial, but the source first is decided on the recent chat the failure is decided ultimatly on initial fetch*
+
+
+
+So the flow is going to be something like this:
+User writes selects a chat based on the username of the peer, first thing is checked does the username === chat.username from the chat list of the sidebar (if it is then ACTIVECHAT is the chat of the list)
+If  username !== chat.username we do not conclude decided from the above written the type of the ACTIVE CHAT, instead our knownledge will come with initial fetch.
+The ACTIVECHAT with only username is going to make the UI in a transition (transitioning chat) -> initial fetch is either going to move the UI if there are messages to existing ACIVECHAT, or new ACTIVECHAT (same properties with the transitioning chat)
+Transitioning chat app state can be changed to existing ACTIVECHAT either by writing a message/receiving message or selecting other existing ACTIVECHAT.
+
+
+
+ACTIVECHAT is driving the whole applications:
+From the derived info when the ACTIVECHAT is set the components with in are grouped in: 
+-UI concerns (activity status, other username(always contained), other user id(avatar)) 
+-Logic (chat room id (sending mechanism of messages, forming the recent chat with the key === chat room id))
+
+The app can be viewed as in stages of a different phases of the ACTIVECHAT:
+- No ACTIVECHAT
+- ACTIVECHAT set only with username / transitioning chat / new chat
+- ACTIVECHAT with all fields set / received from the first fetch / sending message / receiving message / with chat selection
+
+
+
+
+
+
+One active chat has its own properties, is stateful, the states are build by the user capabilities.
+It can be divided in receiving activities and sending activities.
+Sending can be divided into pagination, sending messages and sending side effects.
+
+The main constraint is that receiving activities that are coming from the server needs to be filtered by identificator.
+Received activities with no correspond identificator are rejected to make a UI change.
+States are needed to be cleared before another chat is set to be active.
+
+Flow of a chat.
+
+No chat was selected before, chat is selected there are 2 components that needs to re-render with this change.
+
+#First component Chat Area - > Chat Conversation
+By selecting the active chat a initial fetch is made to the server from the chat page.
+The request for iniial fetch is based on Username of the peer.
+The response is contained if any:
+1.last seen by me - for centering in the scroll Area (Messages are already selected on the server based eiter on sent or seen message if any)
+2.last seen by him - for ui display.
+3.MESSAGES.
+
+Desicion making which state of active chat to be activate New/Existing is depending on MESSAGES existing.
+
+CHAT CONVERSATION is dependent on:           
+1. SEEN correlated:
+ - Last Seen ID by the other
+ - Seen callback (initiating seen)
+
+2.Pagination:
+  - Fetch for Older callback.
+  - Fetch for Newer callback.
+
+3.Messages
+
+4.Active Chat
+
+5.Typing
+ 
+ 
+
+
+
+
+

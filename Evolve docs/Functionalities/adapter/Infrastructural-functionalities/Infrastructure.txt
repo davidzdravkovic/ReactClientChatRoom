@@ -1,0 +1,6 @@
+#Infrastructure derived from the branching of the business logic
+
+Base on the requirements the system needs to have infrastructure that is supporting 
+-persistent connection with main server
+-receiving, storing and session management 
+-allow sending and receiving request with both servers media and main

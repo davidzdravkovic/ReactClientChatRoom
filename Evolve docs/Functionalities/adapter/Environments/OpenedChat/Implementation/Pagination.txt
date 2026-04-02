@@ -1,0 +1,66 @@
+
+**Pagination Mechanism**
+
+Pagination is feature that allows the user to fetch messages by scrolling.
+
+*INITIATING THROUGH SCROLL*
+There are manual scrolling and auto scrolling
+
+##Auto scrolling is scrolling to the bottom on entering the chat and on receiving new messages or typing response IF the User is already near the bottom.
+  Auto scrolling is disabled to make fetch calls (append) cause is setting the reference triggerScrollPos to false.
+
+##Manual scrolling is firing on every scroll a function that has 2 jobs:
+Is checking if the scroll is in the fetching/triggering zone or neutral.
+if it is in neutral is enabling the fetching mechanism by setting the reference triggerScrollPos to true and is returning.
+if it is not neutral is checked first does the fetching mechanism is enabled/triggerScrollPos is true, then is only checked what kind of trigger zone TOP/BOTTOM.
+Every entering in triggering zon the fetch mechanism is disabled by setting the reference triggerScrollPos to false, NEWER/OLDER callback is called and on bottom zone SEEN callback is called.
+///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+ 
+The functions called in trigger zone NEWER/OLDER first is checked for fetch in flight. This is protecting overwritting the fetch type which is important for MERGE MODE.
+
+*Merge Mode*
+
+Merge Mode is mechansim that allows the reponses to be merged correctly in the state MESSAGES depending on the type of the fetch.
+There are 3 different fetch types:
+- initial
+- prepend
+- append
+
+The workflow starts with  User scrolls to trigger zone iniiating a fetch on the moment of creating request a fetchType is set to prepend/append based on OLDER/NEWER respectevely. Later a response to that request needs to read from the fetchType reference to decide the MERGE MODE.
+ 
+The problem is that the user can initiating different fetchType while the previous is not finished yet and on arriving response is going to read WRONG MERGE MODE.
+This can happen only on different fetchTypes if in close window of time prepend and append are initiated the second can overwrite the first.
+Solution differs there are performence wise solutions or just simpllfied once.
+Having in mind that this can rarely happened (User behaviour of scrolling up and down fast many times) the simpliest not hurting the performance is prefered.
+That is disabling fetching if there is a fetch already in Flight.
+
+Every chat starts with enabled fetch or inFlight set to false. Later every request is disbaling the fetch by setting to true, later enabling is happening on received response.
+This solution is solving for the User firing 2 different fetchType fetches in the same time, the main constrain already existing for the same type is the message id which is checked against every time a request needs to be sent, if it is the same id already sent the request drops, so here implicitly there can not be 2 fetches of the same type in the flight (the next one is dependent on the next message id).
+The initial can only mix the order of the MERGE MODE in case when the initial fetch or other types of fetch types are coming as responses from previous chats they are dropped. 
+
+*Ordering of the fetches*
+Ordering of the fetches means the pagination needs to be correctly stacked by the correct ordered message id which is imposed by the MERGE MODE, but also by not having much fetches than one on the flight in the same time.
+
+The real problem here can happend on switching chats, from before chat fetchType before/append or even inital if the user switches chat immediately can come as response on next chat, those responses are filtered by matching chat room id from the messages of the response with the current Active chat and discarded properly. #Later i should consider that for the none existing chat or a fetch prepend/append that returns zero messages does not have CHAT_ROOM_ID to compare with# 
+
+//CROSS CHAT FETCHING PROBLEM WITH STALE REQUETS/RESPONSES
+Old chat fetch responses to overflow into new selected chat are possible with this current design
+
+- Previous chat can have always only one inFlight fetch request at maximum and than the chat can be switched, those responses are discarded based on the username/chatroom_id of the current ACTIVE CHAT.
+- There is possible situation on aggregating fetch requests, if the user is switching chat rapidly the initial fetches can stack on a flight for many different chats (there is no possible in fligh in same time for one chat to be 2 fetches)
+- The client CAN NOT make a prepend/append fetch if the initial fetch is not arrived before, so setting initial to block other fetches is NOT needed cause other fetches are lacking message id's so the block is implicit.
+- Making the latest selected chat receiving sequence of stale initial responses but also possible of stale append/prepend, every response at a time of checking  is checked against the current active chat username (before chat room id, with this is possible the user if it has made a round trip the checking to match)
+
+//THE PROBLEM BEHAVIOURS
+ so when he circles back to that one chat, the stale fetches that are in flight from the previous opening of that one chat now can reach the correct destination, here the possible scenarios are:
+  - For other aggregate fetches that are not from the first opening or from previously openings on that same chat they are all rejected. 
+  - The stale response initial or append/prepend can be received either before or after the initial of the current opening of the same chat, for before that means:
+     - stale responses to be received before the newly initial response, than  newly initial is going to overwrite the stale no matter if they are inital or prepend/append (if slow the user maybe can notice that change -UI/UX) 
+  
+  - The stale responses initial or append/prepend are received after the newly initated initial or newly append/prepend response is received, that means:
+     - stale responses to be received after the newly responses, then stale responses are going to overwrite the newly responses (correctness bug), the only -UI/UX bug is possible if:
+       - same type of stale response + for same message id is overwriting the new response, more common is 2 initial one stale initial one new initial where the stale is coming afer the new
+       - different type where the stale is prepend/append with the newly initial the user without asking will receive not ordered or ordered messages, or stale  initial with  newly prepend/append totally overwriting the whole chat, or stale prepend/append with newly    prepend/append mixing the order totaly.
+
+//SOLUTION
+#For this problem the solution is to have cross chat filtering one level above checking the fetch username with the active chat current username.  

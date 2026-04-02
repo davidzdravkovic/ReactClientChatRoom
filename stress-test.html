@@ -1,0 +1,333 @@
+<!DOCTYPE html>
+<html>
+<head><title>WebSocket Stress Test — Multi-User</title>
+<style>
+  body { font-family: monospace; background: #1a1a2e; color: #0f0; padding: 20px; margin: 0; }
+  h2 { color: #eee; margin-top: 0; }
+  label { color: #ccc; }
+  input, textarea { background: #222; color: #0f0; border: 1px solid #555; padding: 4px; font-family: monospace; }
+  button { padding: 6px 16px; cursor: pointer; font-family: monospace; }
+  button:disabled { opacity: 0.4; cursor: default; }
+  .section { margin-bottom: 14px; }
+  #userTable { border-collapse: collapse; margin-top: 6px; width: 100%; }
+  #userTable th { color: #aaa; text-align: left; padding: 4px 8px; border-bottom: 1px solid #444; font-size: 12px; }
+  #userTable td { padding: 4px 8px; border-bottom: 1px solid #333; font-size: 13px; }
+  .status-cell { min-width: 120px; }
+  .dot { display: inline-block; width: 8px; height: 8px; border-radius: 50%; margin-right: 6px; }
+  .dot-off { background: #555; }
+  .dot-wait { background: #ff0; }
+  .dot-ok { background: #0f0; }
+  .dot-err { background: #f44; }
+  .dot-done { background: #0ff; }
+  #aggStats { margin-top: 12px; padding: 10px; background: #111; border: 1px solid #333; }
+  #aggStats span { margin-right: 20px; }
+  pre { margin-top: 12px; max-height: 40vh; overflow: auto; font-size: 12px; background: #111; padding: 8px; border: 1px solid #333; }
+</style>
+</head>
+<body>
+<h2>WebSocket Multi-User Stress Test</h2>
+
+<div class="section">
+  <label>Users (one per line: <code>username password receiver chatroom_id</code>):</label><br>
+  <textarea id="userList" rows="22" cols="70" style="margin-top:4px;">Matea 123 draganF 17
+draganF 12345 bejb 74
+bejb 123 bela2 85
+bela2 123 novak 142
+novak 123 public 154
+public 123 bela3 150
+bela3 123 bela1 51
+bela1 123 realno 117
+realno 123 nov 113
+nov 123 cvekje 132
+cvekje 123 zd1 135
+zd1 123 zd 23
+zd 123 ljubov 109
+ljubov 123 chat 105
+chat 123 davidZd 53
+davidZd 1234 Bela 36
+Bela 123 davidz 38
+davidz 12345 bela 54
+bela 123 ljubisa1 61
+ljubisa1 123 Matea 59</textarea>
+</div>
+
+<div class="section">
+  <label>Messages per user: <input id="count" type="number" value="100" style="width:80px;"/></label>
+  <button id="loginAllBtn" style="margin-left:14px;">1. Connect & Login All</button>
+  <button id="sendAllBtn" style="margin-left:8px;" disabled>2. Send All</button>
+  <button id="clearLogBtn" style="margin-left:8px;">Clear Log</button>
+</div>
+
+<table id="userTable">
+  <thead><tr>
+    <th>#</th><th>User</th><th>Receiver</th><th>Room</th>
+    <th class="status-cell">Status</th><th>Sent</th><th>ACKs</th><th>Recv</th>
+  </tr></thead>
+  <tbody id="userRows"></tbody>
+</table>
+
+<div id="aggStats">
+  <span style="color:#ccc;">Total Sent: <b id="totalSent" style="color:#0ff;">0</b></span>
+  <span style="color:#ccc;">Total ACKs: <b id="totalAcks" style="color:#0f0;">0</b></span>
+  <span style="color:#ccc;">Total Recv: <b id="totalRecv" style="color:#f80;">0</b></span>
+  <span style="color:#ccc;">Elapsed: <b id="totalTime" style="color:#fff;">—</b></span>
+  <span style="color:#ccc;">Throughput: <b id="totalThroughput" style="color:#ff0;">—</b></span>
+</div>
+
+<pre id="log"></pre>
+
+<script>
+const WS_URL = 'ws://localhost:12346/';
+const logEl = document.getElementById('log');
+
+function print(msg) {
+  const ts = new Date().toISOString().slice(11, 23);
+  logEl.textContent += ts + ' ' + msg + '\n';
+  logEl.scrollTop = logEl.scrollHeight;
+}
+
+function parseUsers() {
+  return document.getElementById('userList').value
+    .split('\n')
+    .map(l => l.trim())
+    .filter(l => l && !l.startsWith('#'))
+    .map(l => {
+      const parts = l.split(/\s+/);
+      return { username: parts[0], password: parts[1], receiver: parts[2] || '', chatroomId: parseInt(parts[3]) || 0 };
+    });
+}
+
+let clients = [];
+
+function updateAggStats() {
+  let sent = 0, acks = 0, recv = 0;
+  clients.forEach(c => { sent += c.sent; acks += c.acks; recv += c.recv; });
+  document.getElementById('totalSent').textContent = sent;
+  document.getElementById('totalAcks').textContent = acks;
+  document.getElementById('totalRecv').textContent = recv;
+}
+
+// ========== CONNECT & LOGIN ALL ==========
+document.getElementById('loginAllBtn').addEventListener('click', () => {
+  const users = parseUsers();
+  if (!users.length) { alert('Add at least one user'); return; }
+  if (users.some(u => !u.password)) { alert('Every user needs a password'); return; }
+
+  document.getElementById('loginAllBtn').disabled = true;
+  document.getElementById('sendAllBtn').disabled = true;
+  clients = [];
+
+  const tbody = document.getElementById('userRows');
+  tbody.innerHTML = '';
+
+  users.forEach((user, idx) => {
+    const tr = document.createElement('tr');
+    tr.innerHTML =
+      '<td style="color:#888;">' + (idx + 1) + '</td>' +
+      '<td style="color:#0ff;">' + user.username + '</td>' +
+      '<td style="color:#aaa;">' + user.receiver + '</td>' +
+      '<td style="color:#aaa;">' + user.chatroomId + '</td>' +
+      '<td class="status-cell" id="st_' + idx + '"><span class="dot dot-off"></span>—</td>' +
+      '<td id="sent_' + idx + '">0</td>' +
+      '<td id="ack_' + idx + '">0</td>' +
+      '<td id="recv_' + idx + '">0</td>';
+    tbody.appendChild(tr);
+
+    const client = {
+      idx, user,
+      ws: null, sessionId: null, userId: null,
+      ready: false, sent: 0, acks: 0, recv: 0
+    };
+    clients.push(client);
+    connectClient(client);
+  });
+});
+
+function setStatus(idx, dotClass, text) {
+  document.getElementById('st_' + idx).innerHTML = '<span class="dot ' + dotClass + '"></span>' + text;
+}
+
+function connectClient(c) {
+  const { idx, user } = c;
+  setStatus(idx, 'dot-wait', 'Connecting...');
+  print('[' + user.username + '] Connecting...');
+
+  const ws = new WebSocket(WS_URL);
+  ws.binaryType = 'arraybuffer';
+  c.ws = ws;
+  let hasSessionId = false;
+
+  ws.onopen = () => {
+    setStatus(idx, 'dot-wait', 'Session ID...');
+  };
+
+  ws.onmessage = (event) => {
+    if (!hasSessionId) {
+      let id = null;
+      if (event.data instanceof ArrayBuffer && event.data.byteLength >= 4) {
+        id = new DataView(event.data).getUint32(0, true);
+      } else if (typeof event.data === 'string' && event.data.length >= 4) {
+        const buf = new Uint8Array(event.data.length);
+        for (let i = 0; i < event.data.length; i++) buf[i] = event.data.charCodeAt(i) & 0xff;
+        id = new DataView(buf.buffer).getUint32(0, true);
+      }
+      if (id && id > 0) {
+        c.sessionId = id;
+        hasSessionId = true;
+        setStatus(idx, 'dot-wait', 'Logging in...');
+        ws.send(JSON.stringify({
+          SessionId: c.sessionId,
+          request: "LOGIN_REQUEST",
+          data: { username: user.username, password: user.password }
+        }));
+      } else {
+        setStatus(idx, 'dot-err', 'No session ID');
+        print('[' + user.username + '] Failed to get session ID');
+      }
+      return;
+    }
+
+    let raw = event.data instanceof ArrayBuffer ? new TextDecoder().decode(event.data) : event.data;
+    let msg;
+    try { msg = JSON.parse(raw); } catch { return; }
+
+    if (msg.response === 'LOGIN_RESPONSE') {
+      if (msg.status === 'SUCCESS') {
+        c.userId = msg.data[0].userId;
+        c.ready = true;
+        setStatus(idx, 'dot-ok', 'Ready');
+        print('[' + user.username + '] Logged in (userId=' + c.userId + ')');
+        checkAllReady();
+      } else {
+        setStatus(idx, 'dot-err', 'Login failed');
+        print('[' + user.username + '] Login FAILED');
+      }
+      return;
+    }
+
+    if (msg.response === 'MESSAGE_ACK_RESPONSE') {
+      c.acks++;
+      document.getElementById('ack_' + idx).textContent = c.acks;
+      updateAggStats();
+      checkAllDone();
+      return;
+    }
+
+    if (msg.response === 'MESSAGE_RESPONSE') {
+      c.recv++;
+      document.getElementById('recv_' + idx).textContent = c.recv;
+      updateAggStats();
+      return;
+    }
+  };
+
+  ws.onerror = () => {
+    setStatus(idx, 'dot-err', 'Error');
+    print('[' + user.username + '] WebSocket error');
+  };
+  ws.onclose = (e) => {
+    setStatus(idx, 'dot-off', 'Closed(' + e.code + ')');
+    print('[' + user.username + '] Disconnected');
+  };
+}
+
+function checkAllReady() {
+  if (clients.length && clients.every(c => c.ready)) {
+    document.getElementById('sendAllBtn').disabled = false;
+    print('[ALL ] All ' + clients.length + ' users logged in — ready to send');
+  }
+}
+
+// ========== SEND ALL ==========
+let sendStartTime = 0;
+let totalTarget = 0;
+let timerInterval = null;
+
+document.getElementById('sendAllBtn').addEventListener('click', () => {
+  const MESSAGE_COUNT = parseInt(document.getElementById('count').value) || 100;
+  totalTarget = MESSAGE_COUNT * clients.length;
+
+  document.getElementById('sendAllBtn').disabled = true;
+  document.getElementById('totalSent').textContent = '0';
+  document.getElementById('totalAcks').textContent = '0';
+  document.getElementById('totalRecv').textContent = '0';
+  document.getElementById('totalTime').textContent = '—';
+  document.getElementById('totalThroughput').textContent = '—';
+
+  print('[ALL ] Sending ' + MESSAGE_COUNT + ' msgs x ' + clients.length + ' users = ' + totalTarget + ' total');
+  sendStartTime = performance.now();
+
+  if (timerInterval) clearInterval(timerInterval);
+  timerInterval = setInterval(() => {
+    const elapsed = ((performance.now() - sendStartTime) / 1000).toFixed(1);
+    document.getElementById('totalTime').textContent = elapsed + 's';
+  }, 200);
+
+  clients.forEach(c => {
+    c.sent = 0;
+    c.acks = 0;
+    c.recv = 0;
+    setStatus(c.idx, 'dot-wait', 'Sending...');
+    document.getElementById('sent_' + c.idx).textContent = '0';
+    document.getElementById('ack_' + c.idx).textContent = '0';
+    document.getElementById('recv_' + c.idx).textContent = '0';
+  });
+
+  for (let i = 0; i < MESSAGE_COUNT; i++) {
+    for (const c of clients) {
+      c.ws.send(JSON.stringify({
+        SessionId: c.sessionId,
+        request: "MESSAGE_REQUEST",
+        data: {
+          senderUserName: c.user.username,
+          receiverUser: c.user.receiver,
+          content: "stress #" + i + " from " + c.user.username,
+          senderId: c.userId,
+          chatroom_id: c.user.chatroomId,
+          temporaryId: i
+        }
+      }));
+      c.sent++;
+    }
+  }
+
+  clients.forEach(c => {
+    document.getElementById('sent_' + c.idx).textContent = c.sent;
+    setStatus(c.idx, 'dot-wait', 'Waiting ACKs...');
+  });
+
+  updateAggStats();
+  print('[ALL ] All sends dispatched. Waiting for ACKs...');
+});
+
+function checkAllDone() {
+  const MESSAGE_COUNT = parseInt(document.getElementById('count').value) || 100;
+  let totalAcks = 0;
+  let allDone = true;
+  clients.forEach(c => {
+    totalAcks += c.acks;
+    if (c.acks >= MESSAGE_COUNT) {
+      setStatus(c.idx, 'dot-done', 'Done');
+    } else {
+      allDone = false;
+    }
+  });
+
+  document.getElementById('totalAcks').textContent = totalAcks;
+
+  if (allDone && sendStartTime > 0) {
+    if (timerInterval) { clearInterval(timerInterval); timerInterval = null; }
+    const elapsed = ((performance.now() - sendStartTime) / 1000).toFixed(2);
+    const throughput = (totalTarget / parseFloat(elapsed)).toFixed(1);
+    document.getElementById('totalTime').textContent = elapsed + 's';
+    document.getElementById('totalThroughput').textContent = throughput + ' msg/sec';
+    print('[DONE] All ' + totalTarget + ' acks received in ' + elapsed + 's');
+    print('[DONE] Aggregate throughput: ' + throughput + ' msg/sec');
+    document.getElementById('sendAllBtn').disabled = false;
+  }
+}
+
+document.getElementById('clearLogBtn').addEventListener('click', () => { logEl.textContent = ''; });
+</script>
+</body>
+</html>

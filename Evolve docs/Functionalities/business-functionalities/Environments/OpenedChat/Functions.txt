@@ -1,0 +1,32 @@
+# Opened Chat Environment – Business Functionalities
+
+This file documents the set of functionalities available in the Opened Chat environment.
+
+## Purpose
+
+The Opened Chat environment enables the client to communicate within a selected conversation. All functionalities from the Chat Page environment remain available alongside the ones listed here.
+
+## Functionalities
+
+1. **Sending a message**
+   - The user can send text, emoji, or image content to the correspondent.
+   - The sent message must appear immediately in the conversation before server confirmation.
+
+2. **Receiving messages**
+   - Messages sent by the correspondent must appear in the conversation in real time.
+
+3. **Pagination**
+   - The user can load older messages by scrolling up.
+   - The user can load newer messages by scrolling down.
+
+4. **Seen status**
+   - When the user views the latest message from the correspondent, the correspondent must be notified.
+   - The user must see which of their own messages have been read by the correspondent.
+
+5. **Typing indicator**
+   - The user must see when the correspondent is currently typing.
+   - The correspondent must see when the user is currently typing.
+
+6. **Gallery**
+   - The user can request all images exchanged within this conversation.
+   - Any image can be viewed in full screen.
