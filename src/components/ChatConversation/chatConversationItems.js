@@ -5,7 +5,8 @@ import {
   getDateKey,
 } from '../../utils/formatTime'
 
-const hasMedia = (m) => m?.mediaId != null && m.mediaId !== 0 && m.mediaId !== '0'
+const hasMedia = (m) =>
+  (m?.mediaId != null && m.mediaId !== 0 && m.mediaId !== '0') || !!m?.localPreviewUrl
 
 export function buildConversationItems({
   messages,
@@ -58,7 +59,7 @@ export function buildConversationItems({
     const isSeen = isMine && lastSeenMessageId != null && messageId != null && Number(messageId) <= Number(lastSeenMessageId)
     const isSending = !!m.temporaryId
     const hasImage = hasMedia(m)
-    const mediaId = hasImage ? m.mediaId : null
+    const mediaId = m.localPreviewUrl ? null : hasImage ? m.mediaId : null
 
     items.push({
       type: 'message',
@@ -75,9 +76,20 @@ export function buildConversationItems({
       timeFull: formatMessageTimeFull(m.time),
       //Media correlated
       hasImage,
-      imageUrl: hasImage ? (messageImageByMediaId?.[m.mediaId] ?? null) : null,
+      imageUrl:
+      //Optimistic url
+        m.localPreviewUrl ??
+        //UrlFromServer
+        (m.mediaId != null && m.mediaId !== 0 && m.mediaId !== '0'
+          ? messageImageByMediaId?.[m.mediaId] ?? null
+          : null),
       mediaId,
-      imageLoading: hasImage && loadingMediaIds?.includes(m.mediaId),
+      //We have image but is we have no preview 
+      //The image is loading / in process..
+      imageLoading:
+        hasImage &&
+        !m.localPreviewUrl &&
+        loadingMediaIds?.includes(m.mediaId),
       avatarUrl: avatarByUserId?.[m.senderId],
     })
   })

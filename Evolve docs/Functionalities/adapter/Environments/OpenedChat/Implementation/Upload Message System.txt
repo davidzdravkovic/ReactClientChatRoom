@@ -1,0 +1,6 @@
+# Upload Message System (parallel track)
+
+Only deltas: where your doc is off or incomplete, after checking code. No echo of ActiveChat.
+Broader evolution + deployment gaps: see Evolution-deployment-notes.txt (same folder).
+
+Failure path: `imageMessageUpload.js` throws (`unSuccessfullUpload`); `handleChatImageFile` catches and `console.error`s — no user-facing UI error yet.

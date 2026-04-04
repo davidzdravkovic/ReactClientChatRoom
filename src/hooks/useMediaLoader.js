@@ -1,5 +1,7 @@
 import { useState, useCallback, useEffect, useRef } from 'react'
 import { fetchProfileImage, fetchMessageImage } from '../network/mediaServer'
+import { getSessionId } from '../network/wsConnection'
+import { runProfilePictureUploadPhases } from '../network/profilePictureUpload'
 
 export function useMediaLoader(currentUser, chats, activeChat, messages) {
 
@@ -20,6 +22,7 @@ export function useMediaLoader(currentUser, chats, activeChat, messages) {
   const avatarRef = useRef(avatarByUserId)
   avatarRef.current = avatarByUserId
 
+  const inFlightAvatarUserIdsRef = useRef(new Set())
 
   //Fetch profile picture for the current user
   useEffect(() => {
@@ -46,7 +49,7 @@ export function useMediaLoader(currentUser, chats, activeChat, messages) {
   //Fetch profile pictures for all other users.
   useEffect(() => {
     if (!currentUser?.userId) return
-
+    
     //FIltering just valid user ids and unique
     const chatUserIds = new Set(chats.map(c => c.otherUserId).filter(Boolean))
     //Take just that are not taken before  
@@ -77,6 +80,36 @@ export function useMediaLoader(currentUser, chats, activeChat, messages) {
 
     return () => { cancelled = true }
   }, [chats])
+  
+  // Active peer may not appear in `chats` yet (e.g. opened by username). fetchProfileImage resolves
+  // with null on 404/error (no throw) — both outcomes are handled in .then.
+  useEffect(() => {
+    if (!activeChat) return
+    const uid = activeChat.otherUserId
+    if (uid == null) return
+    if (Object.prototype.hasOwnProperty.call(avatarRef.current, uid)) return
+    if (inFlightAvatarUserIdsRef.current.has(uid)) return
+
+    inFlightAvatarUserIdsRef.current.add(uid)
+    let cancelled = false
+    fetchProfileImage(uid).then((url) => {
+      inFlightAvatarUserIdsRef.current.delete(uid)
+      if (cancelled) {
+        if (url) URL.revokeObjectURL(url)
+        return
+      }
+      setAvatarByUserId((prev) => {
+        if (prev[uid] && prev[uid] !== url) {
+          URL.revokeObjectURL(prev[uid])
+        }
+        return { ...prev, [uid]: url || null }
+      })
+    })
+
+    return () => {
+      cancelled = true
+    }
+  }, [activeChat?.otherUserId])
 
   //Function that is fetching media for messages when:
   //Called in the use Effect when messages are changing and there is media id that is not fetched before.
@@ -118,5 +151,32 @@ export function useMediaLoader(currentUser, chats, activeChat, messages) {
     })
   }, [messages, loadMessageImage])
 
-  return {loadingMediaIds, messageImageByMediaId, avatarByUserId, loadMessageImage }
+  const uploadProfilePicture = useCallback(async (file) => {
+    if (!currentUser?.userId || !file) return
+    const sid = getSessionId()
+    if (sid == null) {
+      console.warn('No WebSocket session; cannot upload profile picture')
+      return
+    }
+    try {
+      await runProfilePictureUploadPhases(file, currentUser.userId, sid)
+      const url = await fetchProfileImage(currentUser.userId)
+      setAvatarByUserId((prev) => {
+        const old = prev[currentUser.userId]
+        //We whant only one unique profile/avatar 
+        if (old) URL.revokeObjectURL(old)
+        return { ...prev, [currentUser.userId]: url || null }
+      })
+    } catch (e) {
+      console.error('Profile picture upload failed:', e)
+    }
+  }, [currentUser?.userId])
+
+  return {
+    loadingMediaIds,
+    messageImageByMediaId,
+    avatarByUserId,
+    loadMessageImage,
+    uploadProfilePicture,
+  }
 }

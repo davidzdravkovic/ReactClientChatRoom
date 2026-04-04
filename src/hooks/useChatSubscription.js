@@ -40,39 +40,36 @@ export function useChatSubscription(
         case 'FETCH_MESSAGES_RESPONSE': {
           const env = chatSessionEnvRef.current
           if (!env) return
+
           const echoed = msgData.data.find((m) => m.chatIdentifier)?.chatIdentifier ?? null
-          console.log('Received messages for chatIdentifier', echoed, 'current env chatIdentifier', env.conversationEpoch, 'env.state:', env.state)
+          const peerUserId = msgData.data.find((m) => m.otherUserId != null)?.otherUserId ?? null
+
+          console.log('Received messages for chatIdentifier',echoed,'current env chatIdentifier',env.conversationEpoch,'env.state:',env.state)
           const { validSession, mergeMode } = env.fetchResponseCheck(echoed)
           if (!validSession) return
-        //The response arrived to the valid session
 
-        //The transition is complete with the first fetch response
-        //Now we can decide the type of the ACTIVECHAT and we are ending for both types the transitioning state
-          if(activeChatRef.current.transitioning) {
-            //Derived data from already existing chat 
-              const chatRoomId = msgData.data.find((m) => m.chatroom_id != null)?.chatroom_id ?? null
-              const userId = msgData.data.find((m) => m.SenderId != null && m.SenderId !== currentUser.userId)?.SenderId ?? null
-              if(chatRoomId)  {
-               activeChatRef.current.chatRoomId = chatRoomId
-               if(userId) activeChatRef.current.otherUserId = userId
-               activeChatRef.current.state = 'existingChat'
-               env.state = 'existingChat'
-              }
-              else {
-                //Derived data from the messages is not complete so we are considering it as new chat
-                env.state = 'newChat'
-                env.subState = 'noFirstMessageSent'
-                activeChatRef.current.state = 'newChat'
-              }
-              
-
-            console.log('Transitioning complete for', env.peerUserName)
-            activeChatRef.current.transitioning = false
-            env.setInitialFetchDone()
+          if (!activeChatRef.current.initialFetchDone) {
+            const chatRoomId = msgData.data.find((m) => m.chatroom_id != null)?.chatroom_id ?? null
+            //EXISTINGCHAT
+            if (chatRoomId) {
+              if (activeChatRef.current.chatRoomId === null) activeChatRef.current.chatRoomId = chatRoomId
+              activeChatRef.current.state = 'existingChat'
+              env.state = 'existingChat'
+            }
+            //NEWCHAT 
+            else {
+              env.state = 'newChat'
+              env.subState = 'noFirstMessageSent'
+              activeChatRef.current.state = 'newChat'
+            }
+            if (activeChatRef.current.otherUserId === null) activeChatRef.current.otherUserId = peerUserId
+            console.log('Initial fetch complete for', env.peerUserName)
+            activeChatRef.current.initialFetchDone = true
+            //Cause the initial fetch is true there is no new initial fetched by updating the state
             dispatch({ type: 'SELECT_ACTIVE_CHAT', payload: activeChatRef.current })
-            } 
-            console.log('Dispatching messages for chatIdentifier', echoed, 'mergeMode', mergeMode)
-           dispatch({ type: 'FETCH_MESSAGES_RESPONSE',payload: msgData, mergeMode,})
+          }
+          console.log('Dispatching messages for chatIdentifier', echoed, 'mergeMode', mergeMode)
+          dispatch({ type: 'FETCH_MESSAGES_RESPONSE', payload: msgData, mergeMode })
           break
         }
 
@@ -105,7 +102,15 @@ export function useChatSubscription(
 
         case 'MESSAGE_ACK_RESPONSE':
         case 'MESSAGE_RESPONSE':
-          dispatch({
+          //Update the state to EXISTINGCHAT if is first message for the ROOM 
+          if(activeChatRef.current.chatRoomId === null) {
+             activeChatRef.current.chatRoomId = msgData.data.find((m) => m.chatroom_id != null)?.chatroom_id ?? null
+            chatSessionEnvRef.current.chatRoomId = activeChatRef.current.chatRoomId
+              console.log('Received chatRoomId for new chat transition on message response', activeChatRef.current.chatRoomId) 
+              chatSessionEnvRef.current.state = 'existingChat'
+             dispatch({ type: 'SELECT_ACTIVE_CHAT', payload: activeChatRef.current }) }    
+ 
+             dispatch({
             type: msgData.response,
             payload: msgData,
             activeChatId: activeChatRef.current?.chatRoomId,
@@ -127,6 +132,7 @@ export function useChatSubscription(
           console.log('Received chatRoomId response for', chatSessionEnvRef.current?.peerUserName, 'data:', msgData.data)
           const chatRoomId = msgData.data.find((m) => m.chatroom_id != null)?.chatroom_id ?? null
           const otherUserId = msgData.data.find((m) => m.receiver_id != null)?.receiver_id ?? null
+          const otherUserName = msgData.data.find((m) => m.receiver_UserName != null)?.receiver_UserName ?? null
   
           console.log('Received chatRoomId response for', chatSessionEnvRef.current?.peerUserName, 'chatRoomId:', chatRoomId, 'otherUserId:', otherUserId)
           if (chatSessionEnvRef.current?.state === 'newChat' && chatRoomId) {
@@ -139,8 +145,9 @@ export function useChatSubscription(
             activeChatRef.current.state = 'existingChat'
             dispatch({ type: 'SELECT_ACTIVE_CHAT', payload: activeChatRef.current })
 
-            const peer = env.peerUserName
-            const pendingList = bufferOfPendingMessagesRef.current[peer] ?? []
+            //The peer name can be different at this point so the DTO needs to carry the username of the peer
+        
+            const pendingList = bufferOfPendingMessagesRef.current[otherUserName] ?? []
             pendingList.forEach((pending) => {
               const req = createSendMessageStruct(
                 pending.currenUsername,
@@ -153,7 +160,7 @@ export function useChatSubscription(
               )
               sendMessage(JSON.stringify(req))
             })
-            bufferOfPendingMessagesRef.current[peer] = []
+            bufferOfPendingMessagesRef.current[otherUserName] = []
           }
 
           break

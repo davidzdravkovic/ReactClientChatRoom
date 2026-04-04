@@ -3,11 +3,16 @@ import './ChatConversation.css'
 import MessageBubble from '../MessageBubble/MessageBubble'
 import { useChatContext } from '../../context/ChatContext'
 import { buildConversationItems } from './chatConversationItems'
+import { getAvatarColor } from '../../utils/avatarColor'
 
 function ChatConversation({ activeChat, messages, typingUser, lastSeenMessageId = null, onLoadOlder, onLoadNewer, onSeen }) {
   const { currentUser, avatarByUserId, messageImageByMediaId, loadingMediaIds,setCounterPagination } = useChatContext()
 
   const showTyping = typingUser?.isTyping && typingUser?.senderUserName && typingUser.senderUserName !== currentUser?.userName
+  const correspondentLabel = activeChat?.correspondentName ?? typingUser?.senderUserName ?? ''
+  const typingAvatarUrl =
+    activeChat?.otherUserId != null ? avatarByUserId[activeChat.otherUserId] : null
+  const typingAvatarColor = getAvatarColor(correspondentLabel)
   const scrollRef = useRef(null)
   const triggerScrollPos = useRef(false)
 
@@ -113,9 +118,21 @@ useEffect(() => {
         })}
         {showTyping && (
           <div className="chat-conversation-typing" role="status" aria-live="polite" aria-label={`${typingUser.senderUserName} is typing`}>
-            <div className="chat-conversation-typing-avatar-spacer" aria-hidden="true" />
+            <div
+              className={`chat-conversation-typing-avatar${typingAvatarUrl ? ' chat-conversation-typing-avatar--has-img' : ''}`}
+              style={{
+                ['--avatar-bg']: typingAvatarColor.bg,
+                ['--avatar-border']: typingAvatarColor.border,
+              }}
+              aria-hidden="true"
+            >
+              {typingAvatarUrl ? (
+                <img src={typingAvatarUrl} alt="" className="chat-conversation-typing-avatar-img" />
+              ) : (
+                (correspondentLabel?.[0] ?? typingUser.senderUserName?.[0] ?? '?').toUpperCase()
+              )}
+            </div>
             <div className="chat-conversation-typing-bubble">
-              <span className="chat-conversation-typing-name">{typingUser.senderUserName}</span>
               <span className="chat-conversation-typing-dots" aria-hidden="true">
                 <span className="chat-conversation-typing-dot" />
                 <span className="chat-conversation-typing-dot" />

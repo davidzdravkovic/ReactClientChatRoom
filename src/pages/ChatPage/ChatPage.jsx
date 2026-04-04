@@ -17,7 +17,8 @@ function ChatPage({ currentUser, onLogout }) {
     pendingGalleryRef,
     typingTimeoutRef,
     chatSessionEnvRef,
-    bufferOfPendingMessagesRef
+    bufferOfPendingMessagesRef,
+    optimisticMessagesByPeerRef,
   } = subscriptionDeps
 
   useChatSubscription(
@@ -28,6 +29,7 @@ function ChatPage({ currentUser, onLogout }) {
     typingTimeoutRef,
     bufferOfPendingMessagesRef,
     chatSessionEnvRef,
+    optimisticMessagesByPeerRef,
   )
 
   const {
@@ -54,10 +56,17 @@ function ChatPage({ currentUser, onLogout }) {
     setFullscreenImage,
     clearFullscreenImage,
     setCounterPagination,
+    onTyping,
+    handleChatImageFile,
   } = actions
 
-  const { loadingMediaIds, messageImageByMediaId, avatarByUserId, loadMessageImage } =
-    useMediaLoader(currentUser, chats, activeChat, messages)
+  const {
+    loadingMediaIds,
+    messageImageByMediaId,
+    avatarByUserId,
+    loadMessageImage,
+    uploadProfilePicture,
+  } = useMediaLoader(currentUser, chats, activeChat, messages)
 
   const chatContextValue = useMemo(
     () => ({
@@ -91,6 +100,7 @@ function ChatPage({ currentUser, onLogout }) {
             onSelectChatByName={selectChatByName}
             waitRecentChat={waitRecentChat}
             typingByChat={typingByChat}
+            onProfileImageSelect={uploadProfilePicture}
           />
         </div>
         <div className="chat-page-divider" />
@@ -108,6 +118,8 @@ function ChatPage({ currentUser, onLogout }) {
             onLoadOlder={handleLoadOlder}
             onLoadNewer={handleLoadNewer}
             onSeen={handleSeen}
+            onTyping = {onTyping}
+            onChatImageFile={handleChatImageFile}
           />
           {galleryOpen && (
             <ChatGallery mediaIds={galleryMediaIds} onClose={closeGallery} />

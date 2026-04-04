@@ -4,7 +4,7 @@ import { useChatContext } from '../../context/ChatContext'
 
 const MessageBubble = memo(function MessageBubble({ isMine, isSeen, isSending = false, showSeenIndicator = false, senderUserName, content, time, timeFull, hasImage, imageUrl, mediaId, imageLoading, showAvatar = true, avatarUrl }) {
   //LoadMessageImage function clicking on the image bubble is fetching the url for that bubble
-  //
+  
   const { loadMessageImage, onMessageImageClick } = useChatContext()
 
   const bubbleClass = [
@@ -29,7 +29,8 @@ const MessageBubble = memo(function MessageBubble({ isMine, isSeen, isSending = 
         {!isMine && showAvatar && senderUserName && (
           <div className="message-bubble-sender">{senderUserName}</div>
         )}
-        {hasImage ? (
+        
+        {hasImage ? ( // The message is image/media
           <div className="message-bubble-image-wrap">
             <div className="message-bubble-image">
               {imageUrl ? (
@@ -46,12 +47,14 @@ const MessageBubble = memo(function MessageBubble({ isMine, isSeen, isSending = 
                     </svg>
                   </span>
                 </button>
+              // We have the image in a buffer but not loaded yet
               ) : imageLoading ? (
                 <div className="message-bubble-image-loading">
                   <span className="message-bubble-image-spinner" aria-hidden="true" />
                   <span className="message-bubble-image-loading-text">Loading…</span>
                 </div>
-              ) : (
+              ) : // We do not have image so then the media server can try to fetch 
+                (
                 <button
                   type="button"
                   className="message-bubble-image-load focus-ring"

@@ -1,6 +1,10 @@
 /**
- * Media server (e.g. http://localhost:8081) – profile pictures and message attachments.
- * Response: binary body (application/octet-stream). We convert to blob URL for <img>.
+ * Media server (`media_storage` / httplib) on http://localhost:8081 — see `Src/main.cpp`:
+ * - PUT  /media/temp/:uploadId     — write temp .bin
+ * - POST /media/commit/:id/:userId — move temp → ProfilePictures/{userId}.bin
+ * - GET  /media/profile/:userId    — read profile bytes
+ * - POST /media/message/commit/:id — temp → messages/{id}.bin
+ * - GET  /media/message/:mediaId   — read message attachment
  */
 
 const MEDIA_BASE = 'http://localhost:8081'
@@ -11,6 +15,8 @@ const MEDIA_BASE = 'http://localhost:8081'
  * @param {number|string} userId
  * @returns {Promise<string|null>} blob URL or null
  */
+
+//Creating url of received BLOB 
 export async function fetchProfileImage(userId) {
   if (userId == null) return null
   try {
@@ -41,4 +47,49 @@ export async function fetchMessageImage(mediaId) {
 
 export function getMediaBase() {
   return MEDIA_BASE
+}
+
+/** PUT binary to D:/Media/temp/{uploadId}.bin (matches media_storage `Put /media/temp/...`). */
+export async function putTempMediaBlob(uploadId, body, mimeType) {
+  if (uploadId == null) return false
+  try {
+    const res = await fetch(`${MEDIA_BASE}/media/temp/${uploadId}`, {
+      method: 'PUT',
+      headers: {
+        'Content-Type': mimeType || 'application/octet-stream',
+      },
+      body,
+    })
+    return res.ok
+  } catch {
+    return false
+  }
+}
+
+/** Move temp file to permanent profile path (matches `Post /media/commit/:uploadId/:userId`). */
+/** Move temp → D:/Media/messages/{uploadId}.bin */
+export async function postMessageImageCommit(uploadId) {
+  if (uploadId == null) return false
+  try {
+    const res = await fetch(
+      `${MEDIA_BASE}/media/message/commit/${encodeURIComponent(uploadId)}`,
+      { method: 'POST' },
+    )
+    return res.ok
+  } catch {
+    return false
+  }
+}
+
+export async function postProfilePictureCommit(uploadId, userId) {
+  if (uploadId == null || userId == null) return false
+  try {
+    const res = await fetch(
+      `${MEDIA_BASE}/media/commit/${encodeURIComponent(uploadId)}/${encodeURIComponent(userId)}`,
+      { method: 'POST' },
+    )
+    return res.ok
+  } catch {
+    return false
+  }
 }

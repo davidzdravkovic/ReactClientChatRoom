@@ -1,0 +1,47 @@
+# Evolution (must change) + deployment distance
+
+Scope: looked at repo root, `package.json`, `src/**`, network layer. No test files found; no README.
+
+---
+
+Must evolve (before treating this as “production-ready”)
+
+Config / environment
+- WebSocket URL is hardcoded `ws://localhost:12346/` (`wsConnection.js`).
+- Media HTTP base is hardcoded `http://localhost:8081` (`mediaServer.js`).
+- Need env-based URLs (e.g. Vite `import.meta.env`) for any non-local deploy.
+
+Transport / security
+- Production should use `wss://` and `https://` with valid certs; mixed content and insecure WS block many hosts.
+- Session/auth story for WS + media must match how login works in prod (not fully audited here).
+
+Resilience
+- On `WebSocket` `onclose`, socket is nulled; no reconnect/backoff or “you are offline” UX visible in `wsConnection.js`.
+- `sendMessage` warns if socket closed — user can lose actions with no recovery path.
+
+Observability / noise
+- Many `console.log` / `console.warn` across hooks and components (debug-style); should be gated or removed for production.
+
+User-visible errors
+- Several failure paths only log (e.g. image upload catch in `useChatPageState.js`); users need inline/toast/banner feedback.
+
+Product / docs gaps (from code + your ActiveChat notes)
+- Image upload path assumes “existing chat” / init done — aligns with comments; first-message image may still be a product gap vs server.
+- Design doc already lists race conditions around RECENT CHATROOMS vs initial fetch — behavior may still surprise users until tightened.
+
+Quality
+- No automated tests (`*.test.*` / `*.spec.*` not present).
+- No CI config in repo (nothing found).
+
+Shipping the static app
+- `npm run build` (Vite) produces deployable static assets; you still need the chat server + media server reachable at the configured URLs.
+
+---
+
+Deployment distance (rough)
+
+- “Works on my machine” with local backends: already there for dev.
+- “Deploy front + point at real backends” (env URLs, HTTPS/WSS, build, host): on the order of **~1–3 weeks** for someone who already has production-ready chat + media APIs — mostly wiring, smoke testing, and stripping debug logs.
+- “Resilient product” (reconnect, user errors, fewer race surprises, basic tests, monitoring): add roughly **~1–3+ months** depending on team size and how hard you push on polish — not because React is huge (~34 JS/JSX files under `src`), but because WS/chat edge cases and QA take time.
+
+Single number: you are **not** one config flip from prod; you are **several** integration and UX layers away from a safe public deployment. Ballpark **mid distance**: weeks for a thin prod slice, **months** for something you’d call confidently “shipped.”

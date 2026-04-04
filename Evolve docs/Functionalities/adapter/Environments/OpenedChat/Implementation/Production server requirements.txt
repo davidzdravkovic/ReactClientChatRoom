@@ -1,0 +1,68 @@
+# Production — chat server (`chat_room` C++ / Boost.Beast)
+
+Source reviewed: `C:\Users\User\chat_room - Copy (3)` (CMake `chat_server`, PostgreSQL, Boost.Asio/Beast WebSocket).  
+Companion to: Production client requirements.txt, Evolution-deployment-notes.txt.
+
+The **media binary HTTP service** (e.g. httplib on port 8081, per React `mediaServer.js` comments) is a **separate process** — harden and document it separately (TLS, auth on PUT/POST commit, size/MIME limits, disk layout).
+
+---
+
+## What the server does today (relevant to prod)
+
+- **WebSocket** on configurable `ip` + `wsPort` (default `Config/Network.json`: `127.0.0.1`, `wsPort` **12346**). Uses **plain TCP** WebSocket (`boost::beast::websocket::stream<tcp::socket>`) — **no TLS inside the process**.
+- **TCP `port` (12345)** is bound in `Network` constructor but **no accept loop** was found on that acceptor; only the WebSocket acceptor is used. Confirm whether you still need the extra port exposed or can remove it to reduce attack surface.
+- **PostgreSQL** via `libpqxx`; pool size 9. DB user/password: **`db_user` / `db_password` environment variables** (good); host/name/port in `Config/DataBase.json`.
+- **Config path**: `Server` loads `Configuration("../Config")` — **working directory must be correct** when starting the binary (or make the config root explicit/absolute for production).
+- **Build**: `CMakeLists.txt` uses **machine-specific absolute paths** (Boost, PostgreSQL/MSYS). Production builds need a **portable/reproducible** layout (CI image, vcpkg/conan, or documented container).
+
+---
+
+## Critical security gaps (must address before public production)
+
+**1. Passwords**
+
+- `UserDB` authenticates with `SELECT ... WHERE username=$1 AND password=$2` and stores passwords from signup **as provided** — effectively **plaintext in the database**.
+- **Required**: password hashing (e.g. Argon2/bcrypt/scrypt), per-user salt, migration plan for existing rows, and never log or echo passwords.
+
+**2. Session vs. identity on messages**
+
+- `SendMessageStruct` includes `sessionId`, but **`MessageService::sendMessage` does not verify** that the authenticated session matches `senderUserName` / `senderId`. A client could potentially send messages **as another user** if it can reach the socket.
+- **Required**: for every privileged action (send message, fetch, seen, upload, etc.), enforce `userRegistry.findBySession(sessionId)` and assert the session’s user matches the claimed sender/participant (or drop the claim and derive identity only from the registry).
+
+**3. Transport encryption**
+
+- Browsers on HTTPS require **WSS**, not `ws://`. This server does not terminate TLS.
+- **Required**: terminate TLS at a **reverse proxy** (nginx, Caddy, Envoy, cloud LB) with valid certificates, proxy to the plain WebSocket upstream, and set appropriate `Upgrade`/`Connection` headers and **timeouts**. Alternatively embed TLS in the app (more work); proxy is the usual approach.
+
+**4. Logging**
+
+- `Network::readWs` / `writeWs` log **full JSON** (and debug prints elsewhere, e.g. image upload paths). In production this can leak **PII and message content**.
+- **Required**: structured logging, redaction, log levels, and no full payloads in default prod level.
+
+**5. Abuse and availability**
+
+- No application-level **rate limiting** or auth throttling was identified beyond internal traffic lanes / per-client ordering (`TrafficPolicy::maxInflightPerClient` is not a substitute for login/message flood protection).
+- **Required**: limits on connections per IP, login attempts, and message rate; consider OS firewall and proxy limits.
+
+**6. Process model**
+
+- `main.cpp` uses `std::cin.get()` — awkward for a **service/daemon**. Prefer a clean shutdown path (signal handling, systemd/windows service wrapper).
+
+---
+
+## Operational checklist (server)
+
+1. [ ] **TLS**: HTTPS/WSS in front; only proxy reachable from internet; firewall DB and app ports.
+2. [ ] **Secrets**: `db_user` / `db_password` (anda ny future API keys) from env or secret store, not committed files.
+3. [ ] **PostgreSQL**: TLS to DB if remote, least-privilege role, backups and restore tested.
+4. [ ] **Password hashing** + **session-sender binding** fixes deployed and regression-tested.
+5. [ ] **Logging** safe for production; log aggregation if needed.
+6. [ ] **Binary** built and deployed from reproducible steps; **cwd**/`../Config` documented for the service unit.
+7. [ ] **Media server** (separate): HTTPS, auth on upload/commit, max body size, validate MIME, secure paths — aligned with React upload flow.
+
+---
+
+## Relation to the React client
+
+- Client uses `ws://localhost:12346/` and `http://localhost:8081` today — production must switch to **wss://** and **https://** via env (see Production client requirements.txt).
+- Until the server enforces **session ↔ user** on every action, **client-side correctness is not enough** for security.

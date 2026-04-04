@@ -11,6 +11,9 @@ export const initialChatState = {
   counter: 0,
 }
 
+/** Non-zero media id from server; null if absent or 0. */
+
+/** Recent list row: last message text + media id when the server sends them. */
 function formatChatsFromRecent(data) {
   return data.map((c) => ({
     chatRoomId: c.chatroom_id,
@@ -19,6 +22,7 @@ function formatChatsFromRecent(data) {
     online: c.online === true || c.online === 'true',
     otherUserId: c.other_userId,
     lastMessageTime: c.time,
+    lastMessageHasMedia: c.mediaId ?? null
   }))
 }
 
@@ -51,6 +55,7 @@ function recentChatRowFromAckMessage(message, { correspondentName, otherUserId, 
     lastMessageTime: message.Time,
     online: false,
     otherUserId: otherUserIdResolved,
+
   }
 }
 
@@ -110,7 +115,7 @@ export function chatReducer(state, action) {
       if (lastSeenIdByOther != null && chatRoomId != null) {
         lastSeen = { ...lastSeen, [chatRoomId]: lastSeenIdByOther }
       }
-      return { ...state, messages:messages, lastSeenMessageIdByChat: lastSeen }
+      return { ...state, messages, lastSeenMessageIdByChat: lastSeen }
     }
 
     case 'FETCH_IMAGES_FOR_CHAT_RESPONSE': {
@@ -156,7 +161,11 @@ export function chatReducer(state, action) {
       const updatedChat = chatRoomId != null ? chats.find((c) => c.chatRoomId === chatRoomId) : null
       if (updatedChat) {
         chats = [
-          { ...updatedChat, lastMessage: message.Content, lastMessageTime: message.Time },
+          {
+            ...updatedChat,
+            lastMessage: message.Content,
+            lastMessageTime: message.Time,
+          },
           ...chats.filter((c) => c.chatRoomId !== chatRoomId),
         ]
       } else if (chatRoomId != null) {
@@ -179,16 +188,23 @@ export function chatReducer(state, action) {
           mediaId: message.mediaId,
         }
         const tempId = message.temporaryId
+        //optimistic
         if (tempId != null) {
-          const idx = messages.findIndex((msg) => msg.temporaryId === tempId)
+          const idx = messages.findIndex(
+            (msg) => Number(msg.temporaryId) === Number(tempId),
+          )
+          //normal id
           if (idx >= 0) {
             const next = [...messages]
+            const old = next[idx]
+            if (old?.localPreviewUrl) URL.revokeObjectURL(old.localPreviewUrl)
             next[idx] = serverMsg
             messages = next
           } else {
             messages = [...messages, serverMsg]
           }
-        } else {
+        } //normal message
+        else {
           messages = [...messages, serverMsg]
         }
       
@@ -233,6 +249,16 @@ export function chatReducer(state, action) {
 
     case 'OPTIMISTIC_MESSAGE':
       return { ...state, messages: [...state.messages, action.payload] }
+
+    case 'REMOVE_OPTIMISTIC_BY_TEMP_ID': {
+      const tid = Number(action.temporaryId)
+      const messages = state.messages.filter((m) => {
+        if (Number(m.temporaryId) !== tid) return true
+        if (m.localPreviewUrl) URL.revokeObjectURL(m.localPreviewUrl)
+        return false
+      })
+      return { ...state, messages }
+    }
 
     case 'CLOSE_GALLERY':
       return { ...state, galleryOpen: false, galleryMediaIds: [] }

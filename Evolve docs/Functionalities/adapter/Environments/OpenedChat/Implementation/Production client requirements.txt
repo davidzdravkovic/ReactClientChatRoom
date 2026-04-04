@@ -1,0 +1,56 @@
+# Production — what the client (React app) needs
+
+Companion to: Upload Message System.txt, Evolution-deployment-notes.txt.  
+Audience: anyone shipping the Vite front end with chat + media servers.
+
+---
+
+## Timeline reality (2–3 days?)
+
+- **Possible in 2–3 days** only if: chat and media APIs are already hardened (TLS, auth, rate limits, secrets, backups), DNS and certs are ready, and this repo’s work is limited to **env wiring, production build, deploy static assets, and smoke testing** (no major new features).
+- **Unlikely in 2–3 days** if “huge server hardening” is still in progress: TLS termination, WSS + HTTPS alignment, session/token validation on WebSocket and media routes, abuse controls, and operational runbooks usually push a **first safe public cut** toward **roughly 1–2 weeks** for a small team, longer if security review or compliance is involved.
+- **Client-only** work (below) is often **~1–3 days** once backend URLs and auth rules are fixed; the bottleneck is usually **server + ops**, not React file count.
+
+---
+
+## Must have before production (client)
+
+**Configuration**
+- No hardcoded `localhost` for WebSocket or media HTTP in production builds. Use environment variables (e.g. Vite `import.meta.env`) for:
+  - WebSocket URL (`wss://` in production).
+  - Media server base URL (`https://`).
+- Build: `npm run build`; serve static output behind HTTPS; ensure API origins and CORS match deployment.
+
+**Transport**
+- Browser requires **HTTPS** for the app and **WSS** for the socket when not on localhost; mixed content will break connections.
+- Media fetches and uploads must use the same trust model as the rest of the app (cookies / `Authorization` / whatever the backend expects).
+
+**Resilience & UX**
+- Users should see errors when send/upload fails (not only `console.error`). Image upload failure path should surface in UI (toast or inline), consistent with product choice.
+- Consider reconnect/backoff for WebSocket and clear “offline” or “reconnecting” state if the product targets unreliable networks.
+
+**Observability**
+- Reduce or gate `console.log` / `console.warn` in production builds to avoid leaking internals and noise.
+
+**Quality**
+- Smoke test: login, open chat, send text, upload image, receive on second client, refresh, profile image load.
+- Add automated tests where high-risk (e.g. reducer / upload helpers) as the app stabilizes — not a day-one blocker for a private beta if manual QA is strict.
+
+---
+
+## Depends on backend (not only the React repo)
+
+- Auth for WebSocket and media (same session or tokens as login).
+- Media server: size limits, MIME checks, authenticated commit routes, HTTPS, and disk/backup strategy.
+- Rate limiting and monitoring on chat and media endpoints.
+
+---
+
+## Single checklist to “green light” client deploy
+
+1. [ ] Prod env vars set for WS + media base URLs; verified in a production build (not dev server).
+2. [ ] HTTPS + WSS end-to-end; no mixed content.
+3. [ ] Auth works for WS and media in prod (same as staging).
+4. [ ] Image upload + display path tested against prod media URL.
+5. [ ] User-visible failure for failed upload/send where applicable.
+6. [ ] Logs sanitized for production.

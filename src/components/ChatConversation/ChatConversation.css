@@ -58,7 +58,7 @@
 .chat-conversation-typing {
   display: flex;
   gap: var(--space-3);
-  align-items: flex-end;
+  align-items: center;
   max-width: 78%;
   margin-top: var(--space-1);
   margin-bottom: var(--space-4);
@@ -66,17 +66,50 @@
   animation: typingIn var(--duration-normal) var(--ease-out) backwards;
 }
 
-.chat-conversation-typing-avatar-spacer {
+.chat-conversation-typing-avatar {
+  --avatar-bg: var(--surface-2);
+  --avatar-border: var(--border);
   width: 34px;
+  height: 34px;
   min-width: 34px;
+  border-radius: 50%;
+  border: 1px solid var(--avatar-border);
+  background: var(--avatar-bg);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-weight: 700;
+  font-size: 13px;
+  color: rgba(255, 255, 255, 0.95);
   flex-shrink: 0;
+  overflow: hidden;
+  box-shadow: var(--shadow-xs);
+}
+
+.chat-conversation-typing-avatar--has-img {
+  background: transparent;
+}
+
+.chat-conversation-typing-avatar-img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  object-position: center;
+  display: block;
+  image-rendering: -webkit-optimize-contrast;
+  image-rendering: auto;
+  transform: translateZ(0);
+  backface-visibility: hidden;
 }
 
 .chat-conversation-typing-bubble {
   display: inline-flex;
   align-items: center;
+  justify-content: center;
   gap: var(--space-2);
-  padding: var(--space-2) var(--space-4);
+  width: fit-content;
+  min-width: 0;
+  padding: var(--space-2) var(--space-3);
   background: var(--surface-2);
   border: 1px solid var(--border);
   border-radius: var(--radius-xl);
@@ -84,21 +117,15 @@
   box-shadow: var(--shadow-xs);
 }
 
-.chat-conversation-typing-name {
-  font-size: 0.8125rem;
-  font-weight: 600;
-  color: var(--text-secondary);
-}
-
 .chat-conversation-typing-dots {
   display: inline-flex;
   align-items: center;
-  gap: 3px;
+  gap: 6.3px;
 }
 
 .chat-conversation-typing-dot {
-  width: 4px;
-  height: 4px;
+  width: 6.3px;
+  height: 6.3px;
   border-radius: 50%;
   background: var(--muted);
   animation: typingDot 1.2s var(--ease-in-out) infinite both;

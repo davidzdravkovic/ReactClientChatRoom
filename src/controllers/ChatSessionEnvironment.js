@@ -1,16 +1,20 @@
 import { PaginationSession } from './PaginationSession'
-
+//ONE SINGLE CHAT SESSION
+//Single instance represenst active chat session with peer
+//The boundaries on each logical state of the lifecycle of a session
+//For pagination, epoch is used to accept just fetches to this session, pagination instance tells the merge type
+//also is stateful for seen, on append and on prepend fetch.
+//For sending each transition has its own rule all depending on existance of CHATROOM_ID
+//This instance receives null for CHATROOM_ID if if prefetch and finally decided at fetch finish the actual type
 export class ChatSessionEnvironment {
   static nextConversationEpoch = 0
 
-  constructor({ chat }) {
-    this.initialFetchDone = false
-    this.state = `transitioning`
+  constructor(chatRoomId, correspondentName) {
     this.subState = null
-    this.chatRoomId = chat?.chatRoomId ?? null
-    this.peerUserName = chat.correspondentName 
+    this.chatRoomId = chatRoomId ?? null
+    this.peerUserName = correspondentName 
     this.conversationEpoch = ++ChatSessionEnvironment.nextConversationEpoch
-    this.chatSessionId = `${chat?.chatRoomId}:${this.conversationEpoch}`
+    this.chatSessionId = `${chatRoomId}:${this.conversationEpoch}`
     this.pagination = new PaginationSession()
   }
 
@@ -26,11 +30,4 @@ export class ChatSessionEnvironment {
     return { validSession, mergeMode }
   }
 
-  alreadyFetchedInitial() {
-    return this.initialFetchDone
-  }
-
-  setInitialFetchDone() {
-    this.initialFetchDone = true
-  }
 }

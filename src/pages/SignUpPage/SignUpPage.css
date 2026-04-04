@@ -206,6 +206,13 @@
   transform: scale(0.99);
 }
 
+.signup-error {
+  margin: 12px 0 0;
+  font-size: 13px;
+  color: #f85149;
+  line-height: 1.4;
+}
+
 .signup-switch {
   margin: 24px 0 0;
   padding-top: 24px;

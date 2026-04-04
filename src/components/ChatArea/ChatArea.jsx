@@ -5,7 +5,7 @@ import ChatInputBar from '../ChatInputBar/ChatInputBar'
 import { getAvatarColor } from '../../utils/avatarColor'
 import { useChatContext } from '../../context/ChatContext'
 
-function ChatArea({ activeChat, onLogout, messages, typingForActiveChat, lastSeenMessageId = null, onOpenGallery, onMessageSent, onLoadOlder, onLoadNewer, onSeen }) {
+function ChatArea({ activeChat, onLogout, messages, typingForActiveChat, lastSeenMessageId = null, onOpenGallery, onMessageSent, onLoadOlder, onLoadNewer, onSeen, onTyping, onChatImageFile }) {
   const {avatarByUserId } = useChatContext()
   //From activeChat we are extracting for the current user info plus Ui display 2 paths for rendering empty chat or ChatConversation
   const correspondentName = activeChat?.correspondentName
@@ -53,7 +53,7 @@ function ChatArea({ activeChat, onLogout, messages, typingForActiveChat, lastSee
         {!activeChat && (
           <ChatEmpty />
         )}
-         {activeChat && !activeChat.transitioning && (
+         {activeChat && activeChat.initialFetchDone !== false && (
           <>
             <ChatConversation
               activeChat={activeChat}
@@ -68,10 +68,12 @@ function ChatArea({ activeChat, onLogout, messages, typingForActiveChat, lastSee
               activeChat={activeChat}
               onMessageSent={onMessageSent}
               onGalleryClick={onOpenGallery}
+              onSendTyping={onTyping}
+              onChatImageFile={onChatImageFile}
             />
           </>
         )}
-        {activeChat && activeChat.transitioning && (
+        {activeChat && activeChat.initialFetchDone === false && (
           <div className="chat-area-transitioning-overlay" aria-live="assertive">
             Loading chat...
           </div>

@@ -1,27 +1,26 @@
-
 export function createLogStruct(username, password, sessionId = 0) {
   return {
     SessionId: sessionId,
-    request: "LOGIN_REQUEST",
+    request: 'LOGIN_REQUEST',
     data: {
       username,
-      password
-    }
-  };
+      password,
+    },
+  }
 }
 
-// 2️⃣ CreateStruct
+/** Same envelope as login: SessionId + request + data. Server: CREATE_REQUEST → CREATE_RESPONSE. */
 export function createCreateStruct(userName, password, name, email, sessionId = 0) {
   return {
     SessionId: sessionId,
-    request: "CREATE_REQUEST",
+    request: 'CREATE_REQUEST',
     data: {
       userName,
       password,
       name,
-      email
-    }
-  };
+      email,
+    },
+  }
 }
 
 // 3️⃣ ChatRetieve — clientFetchEpoch is echoed on FETCH_MESSAGES_RESPONSE so stale fetches after chat switch are ignored
@@ -117,6 +116,110 @@ export function createFetchDTO(chatroom_id, user_id, sessionId = 0) {
       user_id
     }
   };
+}
+
+/** Chat image message — phase 1 (matches DeserializeMediaMessage INIT). */
+export function createUploadImageMessageInit(
+  userId,
+  clientId,
+  mimeType,
+  fileSizeBytes,
+  sessionId = 0,
+) {
+  return {
+    SessionId: sessionId,
+    request: 'UPLOAD_IMAGE_MESSAGE_REQUEST',
+    data: {
+      userId,
+      stage: 'INIT',
+      clientId,
+      mimeType,
+      fileSizeBytes,
+    },
+  }
+}
+
+/** After PUT /media/temp and POST /media/message/commit — creates PENDING_MEDIA message in DB. */
+export function createUploadImageMessageCommit(
+  userId,
+  clientId,
+  uploadId,
+  senderUserName,
+  receiverUserName,
+  sessionId = 0,
+) {
+  return {
+    SessionId: sessionId,
+    request: 'UPLOAD_IMAGE_MESSAGE_REQUEST',
+    data: {
+      userId,
+      stage: 'COMMIT',
+      clientId,
+      uploadId,
+      senderUserName,
+      receiverUserName,
+    },
+  }
+}
+
+/**
+ * Marks message READY; server sends MESSAGE_ACK + MESSAGE_RESPONSE.
+ * `messageTempId` must match the optimistic row's `temporaryId` (same as INIT `clientId`).
+ */
+export function createUploadImageMessageFinalize(
+  userId,
+  clientId,
+  messageTempId,
+  uploadId,
+  senderUserName,
+  receiverUserName,
+  sessionId = 0,
+) {
+  return {
+    SessionId: sessionId,
+    request: 'UPLOAD_IMAGE_MESSAGE_REQUEST',
+    data: {
+      userId,
+      stage: 'FINALIZE',
+      clientId,
+      messageTempId,
+      uploadId,
+      senderUserName,
+      receiverUserName,
+    },
+  }
+}
+
+/** Profile image: phase 1 — server creates TEMP media row, returns uploadId (media id). */
+export function createUploadProfilePictureInit(
+  userId,
+  mimeType,
+  fileSizeBytes,
+  sessionId = 0,
+) {
+  return {
+    SessionId: sessionId,
+    request: 'UPLOAD_PROFILE_PICTURE_REQUEST',
+    data: {
+      userId,
+      stage: 'INIT',
+      mimeType,
+      fileSizeBytes,
+    },
+  }
+}
+
+/** Profile image: phase 2 — after bytes are on the media server, mark READY and attach profile. */
+export function createUploadProfilePictureCommit(userId, uploadId, sessionId = 0) {
+  return {
+    SessionId: sessionId,
+    request: 'UPLOAD_PROFILE_PICTURE_REQUEST',
+    data: {
+      userId,
+      stage: 'COMMIT',
+      uploadId,
+    },
+  }
 }
 
 export function createFirstMessageDTO(senderUserName, receiverUserName, content, senderId, temporaryId, sessionId = 0, ) {

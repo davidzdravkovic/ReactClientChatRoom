@@ -2,10 +2,83 @@
   flex-shrink: 0;
   padding: var(--space-4) var(--space-5);
   display: flex;
-  align-items: center;
+  flex-direction: column;
+  align-items: stretch;
   gap: var(--space-3);
   border-top: 1px solid var(--border);
   background: var(--bg-elevated);
+}
+
+.chat-input-bar-row {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  min-width: 0;
+}
+
+.chat-input-bar-pending-image {
+  border-radius: var(--radius-lg);
+  border: 1px solid var(--border);
+  background: var(--surface);
+  overflow: hidden;
+}
+
+.chat-input-bar-pending-image-inner {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  padding: var(--space-2) var(--space-3);
+  min-width: 0;
+}
+
+.chat-input-bar-pending-thumb {
+  width: 56px;
+  height: 56px;
+  object-fit: cover;
+  border-radius: var(--radius-md);
+  flex-shrink: 0;
+}
+
+.chat-input-bar-pending-meta {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+  flex: 1;
+}
+
+.chat-input-bar-pending-label {
+  font-size: 0.875rem;
+  font-weight: 600;
+  color: var(--text);
+}
+
+.chat-input-bar-pending-hint {
+  font-size: 0.75rem;
+  color: var(--muted);
+}
+
+.chat-input-bar-pending-remove {
+  margin-left: auto;
+  flex-shrink: 0;
+  width: 36px;
+  height: 36px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border: none;
+  border-radius: var(--radius-md);
+  background: transparent;
+  color: var(--muted);
+  font-size: 1.5rem;
+  line-height: 1;
+  cursor: pointer;
+  transition: color var(--duration-fast), background var(--duration-fast);
+}
+
+.chat-input-bar-pending-remove:hover {
+  color: var(--text);
+  background: var(--accent-soft);
 }
 
 .chat-input-bar-input {
@@ -85,8 +158,41 @@
   filter: brightness(1);
 }
 
+.chat-input-bar-btn:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+  pointer-events: none;
+}
+
 .chat-input-bar-icon {
   width: 22px;
   height: 22px;
   pointer-events: none;
+}
+
+.chat-input-bar-file-input {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
+}
+
+.chat-input-bar-emoji-wrap {
+  position: relative;
+  flex-shrink: 0;
+}
+
+.chat-input-bar-emoji-popover {
+  position: absolute;
+  bottom: calc(100% + 8px);
+  left: 0;
+  z-index: 50;
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-lg, 0 12px 40px rgba(0, 0, 0, 0.18));
+  overflow: hidden;
 }

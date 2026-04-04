@@ -14,7 +14,7 @@ On received chat the user id is taken for fetching the profile picture.
 ACTIVECHAT with all fields can be be obtained directly by:
 1. Selecting a chat existing chat from LEFTSIDEBAR.
 2. Writing the username and matching the chat from the LEFTSIDEBAR.
-3. From transitioning chat on receiving a initial fetch.
+3. From ACTIVECHAT with initialFetchDone false on receiving the initial fetch.
 4. Sending a message.
 5. Receiving a message.
 
@@ -57,8 +57,8 @@ Later the RECENT CHATROOM response is going to return like the pagination meanin
 So the flow is going to be something like this:
 User writes selects a chat based on the username of the peer, first thing is checked does the username === chat.username from the chat list of the sidebar (if it is then ACTIVECHAT is the chat of the list)
 If  username !== chat.username we do not conclude decided from the above written the type of the ACTIVE CHAT, instead our knownledge will come with initial fetch.
-The ACTIVECHAT with only username is going to make the UI in a transition (transitioning chat) -> initial fetch is either going to move the UI if there are messages to existing ACIVECHAT, or new ACTIVECHAT (same properties with the transitioning chat)
-Transitioning chat app state can be changed to existing ACTIVECHAT either by writing a message/receiving message or selecting other existing ACTIVECHAT.
+The ACTIVECHAT with only username sets initialFetchDone false (loading UI) -> initial fetch either moves the UI to existing ACTIVECHAT if there are messages, or new ACTIVECHAT (same peer fields while initialFetchDone was false).
+That loading phase ends when initialFetchDone becomes true; ACTIVECHAT can become fully existing via message send/receive or by selecting another chat.
 
 
 
@@ -69,8 +69,35 @@ From the derived info when the ACTIVECHAT is set the components with in are grou
 
 The app can be viewed as in stages of a different phases of the ACTIVECHAT:
 - No ACTIVECHAT
-- ACTIVECHAT set only with username / transitioning chat / new chat
+- ACTIVECHAT set only with username / initialFetchDone false (loading) / new chat
 - ACTIVECHAT with all fields set / received from the first fetch / sending message / receiving message / with chat selection
+
+**Uploading message image**
+
+Uploading/sending image is like sending message this constrains are: 
+-Init phase is finished
+-Chat is existing (can not be first message with server design now)
+
+1. Start: taking from the OS system.
+
+The first step happens in INPUTBAR when the photo button is clicked:
+
+**Pre-network phase (local / client-only)** — everything below stays in the browser until upload; no server round-trip yet.
+- The OS file picker opens.
+- The user chooses a file; it is attached to state `pendingImage` (the image is loaded with asking for sending).
+- The app then creates a preview, which is basically a URL attached to the optimistic bubble (the message component uses the URL to display the preview).
+- The URL keeps the reference to the bytes in memory (`blob:` URL / `URL.createObjectURL`).
+
+**Network phase (upload / first send)** — the picked `File` leaves the client.
+- On submit, the picked file is sent (`File` is metadata for the picked bytes stored in the browser).
+
+Note: that line is the network step; the heading already says network phase. what the request looks like, route, response, errors is not written here - later in upload API description.
+
+- The network phase can return two results.
+- First is failure: remove the URL, remove the optimistic message, show an error.
+- Second is success: the file is stored in media storage (temp then permanent); the chat server side finishes and the message is delivered to the peer user; the client gets acknowledgement back (MESSAGE_ACK / MESSAGE_RESPONSE) and the optimistic bubble is replaced with the real message (server id, mediaId).
+
+
 
 
 
