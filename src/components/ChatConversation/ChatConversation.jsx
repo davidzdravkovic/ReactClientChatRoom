@@ -5,6 +5,10 @@ import { useChatContext } from '../../context/ChatContext'
 import { buildConversationItems } from './chatConversationItems'
 import { getAvatarColor } from '../../utils/avatarColor'
 
+      const topThreshold = 100
+      const bottomThreshold = 250
+
+
 function ChatConversation({ activeChat, messages, typingUser, lastSeenMessageId = null, onLoadOlder, onLoadNewer, onSeen }) {
   const { currentUser, avatarByUserId, messageImageByMediaId, loadingMediaIds,setCounterPagination } = useChatContext()
 
@@ -15,6 +19,7 @@ function ChatConversation({ activeChat, messages, typingUser, lastSeenMessageId 
   const typingAvatarColor = getAvatarColor(correspondentLabel)
   const scrollRef = useRef(null)
   const triggerScrollPos = useRef(false)
+
 
  if (!activeChat) return null
 
@@ -45,8 +50,8 @@ useEffect(() => {
   const el = scrollRef.current
   if (!el) return
 
-  const threshold = 100
-  const atBottom = el.scrollHeight - el.scrollTop - el.clientHeight < threshold
+
+  const atBottom = el.scrollHeight - el.scrollTop - el.clientHeight < bottomThreshold
   if (atBottom) {
     el.scrollTo({ top: el.scrollHeight })
     triggerScrollPos.current = false
@@ -57,11 +62,9 @@ useEffect(() => {
     
       const onScroll = () => {
       const el = scrollRef.current
-      if (!el) return
-      const threshold = 100
-      
-      const notAtTop = el.scrollTop > threshold  
-      const notAtBottom =el.scrollHeight - el.scrollTop - el.clientHeight > threshold
+      if (!el) return 
+      const notAtTop = el.scrollTop > topThreshold  
+      const notAtBottom =el.scrollHeight - el.scrollTop - el.clientHeight > bottomThreshold
       const neutral = (notAtTop) && (notAtBottom)
       if(neutral) {
         triggerScrollPos.current = true;

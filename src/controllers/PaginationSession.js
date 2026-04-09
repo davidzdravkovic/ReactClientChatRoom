@@ -9,7 +9,7 @@ export class PaginationSession {
   constructor() {
   }
 
-  requestOlder(messages) {
+   requestOlder(messages) {
     if (this.inFlight) return null
     if (!messages?.length) return null
     const oldestId = messages[0].id

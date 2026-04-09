@@ -8,9 +8,9 @@ OnScroll  function  goal is to call functions for making a requests, request for
 But this conditions needs to be met:
  - The scroll element needs to be in the area where is fetchable and that is for older messages:  ScrollRef < 100 pixels from TOP or for new messages: scrollRef < 100 pixels from BOTTOM.
  - The user is able to move in that range of 100 pixels calling each time onScroll function with the right condition making many fetches with just one really intended.
- - In purpose one achieving situaion where entering in that zone = one fetch call, triggerScrollPos is a guard that is changing based on zone. Neutral zone is enabling this guard and fetchable zone is disabling.
+ - In purpose on achieving situaion where entering in that zone = one fetch call, triggerScrollPos is a guard that is changing based on zone. Neutral zone is enabling this guard and fetchable zone is disabling.
  
-There is autoscrolling useEffect that has a goal on first entering the chat or message or typing change if the user is near the bottom the scroll to go in the zone of fetchable for newer.
+There is autoscrolling useEffect that has a goal on  message or typing change if the user is near the bottom the scroll to go in the zone of fetchable for newer.
 But to prevent fetches for this kind of scrolling the guard triggerScrollPos is set to false, which onScroll function will return.
 
 For both autoscrolling or manual scrolling on bottom (for manual if criteria is met) onSeen function call is made.

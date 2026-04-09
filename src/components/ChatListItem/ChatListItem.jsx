@@ -27,7 +27,6 @@ const ChatListItem = memo(function ChatListItem({ chat, isActive, onSelect, avat
     chat
   const typingUser = typing?.[chatRoomId] && typing[chatRoomId] !== null
   const previewText = lastMessage !== ""
-  console.log(`content is ${lastMessage}`)
   /** Row is from a real last message (recent/ack) but text is empty — e.g. image with no caption and no media_id on the wire. */
   const name = correspondentName
   const initials = (name)

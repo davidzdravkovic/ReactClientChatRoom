@@ -1,0 +1,72 @@
+#Sending mechanism (implementation)
+
+For a user to send a message there is one main constraint and that is that the user can not send message if ACTIVECHAT is null -> later there should not be ACTIVECHAT on users that are not existing the server will return not found.
+
+1.Step preparing the input
+ The input is initiate in the INPUTBAR component the div is forum that is sending three types of input:
+- Images
+- Emojis
+- Text
+
+There are 2 types of states that are filled before a submit triggers the sending.
+ - Pending image (images)
+ - Text (emoji, text)
+*Side effect is typing request.
+
+Sending images is constrained by one more condition and that is writing on ACTIVECHAT that is not new, so the chat needs to be not null and existing, the constraint is achieved by disabling the button.
+*There is no first message with image type.
+
+All of this 3 inputs are handled by the same button on submit the process goes like this for all of them:
+1. Must ACTIVECHAT not to be null.
+2. For images sending  if we have image in pending image state  a callback UPLOADIMAGE from props is called, and is returned (meaning a image and text for now can not be sent in one click).
+3.For text and emoji the time is calculated and the temporary id for the message, and the content is extracted from the text state given all this to the callback from the props ONMESSAGESENT, the text state is freed and the INPUTBAR finalize the work. 
+
+2.Step executing the logic for the sending.
+
+Called callback from the submit function from the INPUTBAR is receiving arguments about the target and the message itself.
+*The goal of this function is to form a optimistic message and sent a request DTO. 
+- Optimistic is formed right away with provided temporary id, content, and time from the payload.
+- Then the sending mechanism is happening the only place of truth about the state of the chat is the chat session instance, so the constraint is that initial fetch needs to be done, so for chat state to be defined, the chat can have two states:
+   1. New Chat with:
+      - not sent the first message
+      - sent first message
+   2. Existing Chat.
+
+
+3.Step optimistic reconsolidation
+
+If all conditions are passed then the message is sent, the UI displays the message from the moment of submiting to the moment of MESSAGE ACK RESPONSE as labeled sending.
+The MESSAGE ACK RESPONSE needs to find the temporary id in the message state and to swap its place with the optimistic message.
+The user can switch chats before the ACK response is received, this design is discarding the response if the ACK message can not be found in the state.
+
+In this case is possible user to write message then switches chats, opens the same chat from which the message is sent,then  the initial response is reading before the message is written by that  not catching it with last message part.
+What here i will do with the ACK response received in preiniital response or post initial? i need to try to insert in the storage if in the storage there is no message id with the id from the MESSAGE ACK RESPONSE.
+So initial fetch can return without the message already sent, then the ACK can be received later.
+So that means the optimistic message needs to update the storage always.
+
+
+
+*New Chat how is done and what needs to be covered
+
+The chat state is decided on chat opening when the initial fetch is done, if the response has no messages a new chat state is loaded. Does this design covers all of the edge cases, to answer this we need to understand what is possible with concurrency.
+Truth is dependened on just one thing, the point of time where the read from DB happens for the initial fetch. We can not know when the read happens we only know when the initial fetch response happens, but between issuing request and receiving response
+other activities could happen:
+ 1.For the other peer the writing is happening on first message  after the read happens for out initial request.
+ 2.Our first message from previous session with the same peer writes happens after fetch initial read.
+In those scenarios even though the second one is i guess realy rarely (maybe possible if the message is stuck on the server some DB activity for other user consumes time...) the initial fetch request can not be a single source of truth.
+The system needs to cover those responses in the  period from when the initial request was issued to the moment of the response, all responses that are coming after inital fetch response are handled gracefully and expected.
+
+The first intuitive solution is the first data that caries info with which we can update the chat state is wrong in this system design, because of one obvious reason - UI. When the state is changed from new to existing the UI re-renders with the new state.
+Allows the user to send message and receive message even the initial message request carrying the messages is lacking (the anchor is lost, and the ordering of the messages is vurnable), conclusion is not updating the state in preinitial fetch response
+but aslo not to passed on them, the solution is they to be used as a latch that is going to be used after the first initial response is finished and reconsolidate with that latch.
+How the reconsolidation is going to be execute depends on what kind of response sets the flag:
+Message response is stored in buffer, zero initial fetch is always checking for message there if there is message than the chat is decided to be existing.
+Message ACK response and chatroom id response even though the ACK response carries with itself the message they set the same flag which asks for new refetching.
+ - Between ACK and chatroom id response there could happen race condition which first comes as response sets the flag maybe i need to decouple them and only for chatroom id to fetch the initial again.
+
+
+ 
+
+
+
+

@@ -18,7 +18,7 @@ function ChatPage({ currentUser, onLogout }) {
     typingTimeoutRef,
     chatSessionEnvRef,
     bufferOfPendingMessagesRef,
-    optimisticMessagesByPeerRef,
+    messageStorageRef,
   } = subscriptionDeps
 
   useChatSubscription(
@@ -29,7 +29,7 @@ function ChatPage({ currentUser, onLogout }) {
     typingTimeoutRef,
     bufferOfPendingMessagesRef,
     chatSessionEnvRef,
-    optimisticMessagesByPeerRef,
+    messageStorageRef,
   )
 
   const {
@@ -43,6 +43,16 @@ function ChatPage({ currentUser, onLogout }) {
     lastSeenMessageIdByChat,
     fullScreenImageUrl,
   } = state
+
+  //This is not causing re-rendering so for now everything that updates those 2 fields have uprfront something that changes state
+  //Always is called selected Chat
+  const canAttachImage = chatSessionEnvRef.current?.state === 'existingChat' && activeChat?.chatRoomId != null
+
+  const activeChatOnline = useMemo(() => {
+    if (!activeChat?.correspondentName) return null
+    const match = chats.find((c) => c.correspondentName === activeChat.correspondentName)
+    return match?.online ?? null
+  }, [activeChat?.correspondentName, chats])
 
   const {
     selectChat,
@@ -110,6 +120,8 @@ function ChatPage({ currentUser, onLogout }) {
             onLogout={onLogout}
             onMessageSent={handleMessageSent}
             activeChat={activeChat}
+            canAttachImage={canAttachImage}
+            activeChatOnline={activeChatOnline}
             messages={messages}
             typingForActiveChat={activeChat ? typingByChat[activeChat.chatRoomId] : null}
             lastSeenMessageId={

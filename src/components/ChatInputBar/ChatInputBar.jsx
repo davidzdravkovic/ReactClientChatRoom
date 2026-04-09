@@ -8,7 +8,7 @@ import { nextClientTemporaryId } from '../../utils/nextClientTemporaryId'
 const TYPING_DEBOUNCE_MS = 300
 const TYPING_IDLE_MS = 2500
 
-function ChatInputBar({ activeChat, onMessageSent, onGalleryClick, onSendTyping, onChatImageFile }) {
+function ChatInputBar({ activeChat, canAttachImage, onMessageSent, onGalleryClick, onSendTyping, onChatImageFile }) {
   const { currentUser } = useChatContext()
   const [text, setText] = useState('')
   const [emojiPickerOpen, setEmojiPickerOpen] = useState(false)
@@ -22,7 +22,6 @@ function ChatInputBar({ activeChat, onMessageSent, onGalleryClick, onSendTyping,
   //Image
   const chatImageInputRef = useRef(null)
   const chatImageInputId = useId()
-  const canAttachImage = activeChat?.state === 'existingChat' && activeChat?.chatRoomId != null
   /** Picked image shown in the bar; upload starts only when user presses Send. */
   const [pendingImage, setPendingImage] = useState(null)
 
@@ -109,6 +108,7 @@ function ChatInputBar({ activeChat, onMessageSent, onGalleryClick, onSendTyping,
     return () => document.removeEventListener('pointerdown', onPointerDown, true)
   }, [emojiPickerOpen])
 
+  //Preparing the emoji by assigning the content in the text state
   function handleEmojiSelect(emoji) {
     const ch = emoji?.native ?? ''
     if (ch) setText((t) => t + ch)
@@ -119,6 +119,7 @@ function ChatInputBar({ activeChat, onMessageSent, onGalleryClick, onSendTyping,
     e.preventDefault()
     if (!activeChat || !currentUser) return
 
+    //If we have text and image write this is going to sent just the image on the submit the text is staying in the input bar
     if (pendingImage?.file) {
       const file = pendingImage.file
       clearPendingImage()
@@ -148,6 +149,7 @@ function ChatInputBar({ activeChat, onMessageSent, onGalleryClick, onSendTyping,
     cancelTypingAndSendStop()
   }
 
+  //Preparing the text content 
   function handleInputChange(e) {
     setText(e.target.value)
     scheduleTypingStart()

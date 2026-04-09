@@ -11,6 +11,9 @@ export class ChatSessionEnvironment {
 
   constructor(chatRoomId, correspondentName) {
     this.subState = null
+    this.chatAcknowledge = false
+    this.firstOptimistic = true
+    this.pendingSeed = false
     this.chatRoomId = chatRoomId ?? null
     this.peerUserName = correspondentName 
     this.conversationEpoch = ++ChatSessionEnvironment.nextConversationEpoch

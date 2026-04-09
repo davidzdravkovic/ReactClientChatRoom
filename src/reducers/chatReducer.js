@@ -60,13 +60,23 @@ function recentChatRowFromAckMessage(message, { correspondentName, otherUserId, 
 }
 
 function parseFetchedMessages(data) {
-  //Only valid messages
-  const messageList = data.filter(
-    (m) => m.messageId != null || m.Content != null || m.SenderId != null
+  // Find the index of the marker
+  const barrierIndex = data.findIndex(
+    (m) => m.endOfInitialSize !== undefined
   )
 
+  // Extract the size (if exists)
+  const endOfInitialSize =
+    barrierIndex !== -1 ? data[barrierIndex].endOfInitialSize : null
 
-  //Extract the seen from the other
+  // Take only the initial messages
+  const messages =
+    endOfInitialSize != null ? data.slice(0,  barrierIndex) : data
+    console.log(`does the payload matches: ${data.length} is equal to ${messages.length}`)
+    const messageList = messages.filter((m)=> m.messageId != null)
+    
+
+  // Extract last seen
   let lastSeenIdByOther = null
   for (const item of data) {
     if (item.last_seen_message_id_by_other != null) {
@@ -74,7 +84,8 @@ function parseFetchedMessages(data) {
       break
     }
   }
-  //Format the messages from the server
+
+  // Format messages
   const fetchedMessages = messageList.map((m) => ({
     id: m.messageId,
     content: m.Content,
@@ -83,8 +94,10 @@ function parseFetchedMessages(data) {
     mediaId: m.mediaId,
     chatRoomId: m.chatroom_id,
   }))
-  //Extract he chat room id from the messages if any
-  const chatRoomId = fetchedMessages.find((m) => m.chatRoomId != null)?.chatRoomId ?? null
+
+  const chatRoomId =
+    fetchedMessages.find((m) => m.chatRoomId != null)?.chatRoomId ?? null
+
   return { fetchedMessages, lastSeenIdByOther, chatRoomId }
 }
 
@@ -150,6 +163,7 @@ export function chatReducer(state, action) {
     case 'MESSAGE_RESPONSE': {
       const message = action.payload.data[0]
       const chatRoomId = message.chatroom_id
+      const peerUserName = message.Sender
 
       const ackMeta = {
         correspondentName: action.correspondentName,
@@ -178,8 +192,10 @@ export function chatReducer(state, action) {
       let typingByChat = { ...state.typingByChat, [chatRoomId]: null }
 
       let messages = state.messages
+      if(messages.length === 0 ) console.log(`messages are empty`)
       //for now lets just update the message
-       
+    
+       //The real bubble is excluding the temporary id 
         const serverMsg = {
           id: message.messageId,
           content: message.Content,
@@ -188,24 +204,23 @@ export function chatReducer(state, action) {
           mediaId: message.mediaId,
         }
         const tempId = message.temporaryId
+        console.log(`temporary ${tempId}`)
+        
         //optimistic
-        if (tempId != null) {
-          const idx = messages.findIndex(
-            (msg) => Number(msg.temporaryId) === Number(tempId),
-          )
+        if (tempId > 0) {
+            const idx = messages.findIndex( (msg) => Number(msg.temporaryId) === Number(tempId))
           //normal id
+          console.log(`the index is ${idx}`)
           if (idx >= 0) {
             const next = [...messages]
             const old = next[idx]
             if (old?.localPreviewUrl) URL.revokeObjectURL(old.localPreviewUrl)
             next[idx] = serverMsg
             messages = next
-          } else {
-            messages = [...messages, serverMsg]
-          }
+          } 
         } //normal message
         else {
-          messages = [...messages, serverMsg]
+         if(peerUserName === state.activeChat?.correspondentName) messages = [...messages, serverMsg]
         }
       
 
@@ -244,8 +259,19 @@ export function chatReducer(state, action) {
     case 'SELECT_ACTIVE_CHAT':
       return { ...state, activeChat: action.payload, messages: [] }
 
-      case `SELECT_CHAT_BY_NAME`:
-      return { ...state, activeChat: action.payload, messages: [] }
+      case `UPDATE_ACTIVE_CHAT`:
+        return {...state, activeChat: action.payload}
+
+
+    case 'SEED_FROM_STORAGE': {
+      const payloadTempIds = new Set(
+        action.payload.filter(m => m.temporaryId != null).map(m => m.temporaryId)
+      )
+      const extra = state.messages.filter(
+        m => m.temporaryId != null && !payloadTempIds.has(m.temporaryId)
+      )
+      return { ...state, messages: [...action.payload, ...extra] }
+    }
 
     case 'OPTIMISTIC_MESSAGE':
       return { ...state, messages: [...state.messages, action.payload] }

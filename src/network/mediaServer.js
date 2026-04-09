@@ -3,7 +3,7 @@
  * - PUT  /media/temp/:uploadId     — write temp .bin
  * - POST /media/commit/:id/:userId — move temp → ProfilePictures/{userId}.bin
  * - GET  /media/profile/:userId    — read profile bytes
- * - POST /media/message/commit/:id — temp → messages/{id}.bin
+ * - POST /media/message/commit/:id — body → messages/{id}.bin (server writes file)
  * - GET  /media/message/:mediaId   — read message attachment
  */
 
@@ -49,11 +49,12 @@ export function getMediaBase() {
   return MEDIA_BASE
 }
 
-/** PUT binary to D:/Media/temp/{uploadId}.bin (matches media_storage `Put /media/temp/...`). */
+
+/** PUT binary to D:/Media/temp/{uploadId}.bin (matches httplib `Put /media/temp/...`). */
 export async function putTempMediaBlob(uploadId, body, mimeType) {
   if (uploadId == null) return false
   try {
-    const res = await fetch(`${MEDIA_BASE}/media/temp/${uploadId}`, {
+    const res = await fetch(`${MEDIA_BASE}/media/temp/${encodeURIComponent(uploadId)}`, {
       method: 'PUT',
       headers: {
         'Content-Type': mimeType || 'application/octet-stream',
@@ -66,15 +67,17 @@ export async function putTempMediaBlob(uploadId, body, mimeType) {
   }
 }
 
-/** Move temp file to permanent profile path (matches `Post /media/commit/:uploadId/:userId`). */
-/** Move temp → D:/Media/messages/{uploadId}.bin */
-export async function postMessageImageCommit(uploadId) {
+/** Write chat image bytes to D:/Media/messages/{uploadId}.bin (httplib `Post /media/message/commit/:id`). */
+export async function postMessageImageCommit(uploadId, body, mimeType) {
   if (uploadId == null) return false
   try {
-    const res = await fetch(
-      `${MEDIA_BASE}/media/message/commit/${encodeURIComponent(uploadId)}`,
-      { method: 'POST' },
-    )
+    const res = await fetch(`${MEDIA_BASE}/media/message/commit/${encodeURIComponent(uploadId)}`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': mimeType || 'application/octet-stream',
+      },
+      body,
+    })
     return res.ok
   } catch {
     return false

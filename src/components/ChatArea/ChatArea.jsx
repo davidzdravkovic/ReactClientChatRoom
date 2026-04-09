@@ -5,7 +5,7 @@ import ChatInputBar from '../ChatInputBar/ChatInputBar'
 import { getAvatarColor } from '../../utils/avatarColor'
 import { useChatContext } from '../../context/ChatContext'
 
-function ChatArea({ activeChat, onLogout, messages, typingForActiveChat, lastSeenMessageId = null, onOpenGallery, onMessageSent, onLoadOlder, onLoadNewer, onSeen, onTyping, onChatImageFile }) {
+function ChatArea({ activeChat, activeChatOnline, canAttachImage, onLogout, messages, typingForActiveChat, lastSeenMessageId = null, onOpenGallery, onMessageSent, onLoadOlder, onLoadNewer, onSeen, onTyping, onChatImageFile }) {
   const {avatarByUserId } = useChatContext()
   //From activeChat we are extracting for the current user info plus Ui display 2 paths for rendering empty chat or ChatConversation
   const correspondentName = activeChat?.correspondentName
@@ -35,10 +35,10 @@ function ChatArea({ activeChat, onLogout, messages, typingForActiveChat, lastSee
           <div className="chat-area-info">
             <span className="chat-area-name">{correspondentName ?? 'Select a chat'}</span>
             <span
-              className={`chat-area-status ${activeChat?.online ? 'chat-area-status--online' : 'chat-area-status--offline'}`}
+              className={`chat-area-status ${activeChatOnline ? 'chat-area-status--online' : 'chat-area-status--offline'}`}
               aria-live="polite"
             >
-              {activeChat ? (activeChat.online ? 'Online' : 'Offline') : 'Pick a conversation from the left'}
+              {activeChat ? (activeChatOnline ? 'Online' : 'Offline') : 'Pick a conversation from the left'}
             </span>
           </div>
         </div>
@@ -66,6 +66,7 @@ function ChatArea({ activeChat, onLogout, messages, typingForActiveChat, lastSee
             />
             <ChatInputBar
               activeChat={activeChat}
+              canAttachImage={canAttachImage}
               onMessageSent={onMessageSent}
               onGalleryClick={onOpenGallery}
               onSendTyping={onTyping}

@@ -33,13 +33,14 @@ export function useChatPageState(currentUser) {
   const pendingGalleryRef = useRef(false)
   const chatSessionEnvRef = useRef(null)
   const bufferOfPendingMessagesRef = useRef({})
+  const messageStorageRef = useRef({})
 
   useEffect(() => {
     const chatRequest = createChatRoomDTO(currentUser.userId, getSessionId())
     sendMessage(JSON.stringify(chatRequest))
   }, [currentUser?.userId])
 
-//Needs to run only ONCE in a single chat session
+  //Needs to run only ONCE in a single chat session
 //ActiveChat carries the flag (UI logic + first initial fetch), set to true on chat clicking
 //While initialfetch is not done (false) this effect needs to run only ONCE -> Only ONE state update during this phase on activeChat
 //Set to false on the first fetch 
@@ -62,12 +63,23 @@ export function useChatPageState(currentUser) {
     sendMessage(JSON.stringify(fetchMessagesRequest))
   }, [activeChat, currentUser.userName])
 
+  function prevChatRemoveEntry () {
+
+      const prevEnv = chatSessionEnvRef.current
+      const prevPeerName = prevEnv?.peerUserName ?? activeChatRef.current?.correspondentName
+      if (prevEnv?.state === 'newChat' && prevPeerName && messageStorageRef.current[prevPeerName]) {
+      delete messageStorageRef.current[prevPeerName]
+    }
+
+  }
+
 
 
   const handleLoadOlder = useCallback(() => {
     const env = chatSessionEnvRef.current
     if (!env) return
     const oldestId = env.pagination.requestOlder(messages)
+    console.log(`the oldest id is ${oldestId}`)
     if (oldestId == null) return
     const chat = activeChatRef.current
     if (!chat) return
@@ -128,17 +140,43 @@ export function useChatPageState(currentUser) {
       console.log('Message sent before initial fetch for', chatSessionEnvRef.current?.peerUserName)
       return
     }
-    //Create a optimistic bubble on sent message for the current user UI
-       dispatch({
-      type: 'OPTIMISTIC_MESSAGE',
-      payload: {
-        id: `temp-${payload.temporaryId}`,
-        content: payload.content,
-        senderId: payload.senderId,
-        time: payload.time,
+    if (chatSessionEnvRef.current.firstOptimistic) {
+      const peer = chatSessionEnvRef.current.peerUserName
+      if (!messageStorageRef.current[peer]) messageStorageRef.current[peer] = []
+      messageStorageRef.current[peer].push({
+        Content: payload.content,
+        SenderId: payload.senderId,
+        Time: payload.time,
         temporaryId: payload.temporaryId,
-      },
-    })
+      })
+
+      if (!chatSessionEnvRef.current.pagination.inFlight) {
+        const formatted = messageStorageRef.current[peer].map(m => ({
+          id: m.messageId ?? `temp-${m.temporaryId}`,
+          content: m.Content,
+          senderId: m.SenderId,
+          time: m.Time,
+          mediaId: m.mediaId,
+          chatRoomId: m.chatroom_id,
+          temporaryId: m.temporaryId,
+        }))
+        dispatch({ type: 'SEED_FROM_STORAGE', payload: formatted })
+      } else {
+        chatSessionEnvRef.current.pendingSeed = true
+      }
+      chatSessionEnvRef.current.firstOptimistic = false
+    } else {
+      dispatch({
+        type: 'OPTIMISTIC_MESSAGE',
+        payload: {
+          id: `temp-${payload.temporaryId}`,
+          content: payload.content,
+          senderId: payload.senderId,
+          time: payload.time,
+          temporaryId: payload.temporaryId,
+        },
+      })
+    }
 
      if(chatSessionEnvRef.current?.state === 'newChat') { 
       if(chatSessionEnvRef.current.subState === `noFirstMessageSent`) {
@@ -153,6 +191,7 @@ export function useChatPageState(currentUser) {
         )
          sendMessage(JSON.stringify(req))
          chatSessionEnvRef.current.subState = `firstMessageSent`
+         return
       }
       else if(chatSessionEnvRef.current.subState === `firstMessageSent`) {
         console.log('Subsequent message sent for new chat with', chatSessionEnvRef.current.peerUserName)
@@ -161,6 +200,7 @@ export function useChatPageState(currentUser) {
         if (!pendingByPeer[key]) pendingByPeer[key] = []
         pendingByPeer[key].push(payload)
       }
+      return
     }
     else if(chatSessionEnvRef.current?.state === 'existingChat') {
       console.log('Message sent for existing chat with', chatSessionEnvRef.current.peerUserName, 'chatRoomId:', activeChatRef.current.chatRoomId,payload.chatRoomId)
@@ -190,9 +230,12 @@ export function useChatPageState(currentUser) {
 
   const selectChat = useCallback((chat) => {
     //Selecting chat by from recent chat LIST
-     if (activeChatRef.current?.correspondentName === chat.correspondentName) return
-        chatSessionEnvRef.current = new ChatSessionEnvironment(chat.chatRoomId,chat.correspondentName)
-        chat.initialFetchDone = false
+    if (activeChatRef.current?.correspondentName === chat.correspondentName) return
+
+    //If prev chat was newChat it removes the entry from messageStorageRef
+        prevChatRemoveEntry () 
+    chatSessionEnvRef.current = new ChatSessionEnvironment(chat.chatRoomId, chat.correspondentName)
+    chat.initialFetchDone = false
     dispatch({ type: 'SELECT_ACTIVE_CHAT', payload: chat })
   }, [])
 
@@ -200,6 +243,8 @@ export function useChatPageState(currentUser) {
   const  selectChatByName = useCallback((correspondentName) => {
     //Selecting chat by SEARCH
     if (activeChatRef.current?.correspondentName === correspondentName) return
+    //If prev chat was newChat it removes the entry from messageStorageRef
+    prevChatRemoveEntry()
     const chat = chats.find((c) => c.correspondentName === correspondentName)
     //If the searched user is already in the recent chats
     if (chat) {
@@ -209,7 +254,6 @@ export function useChatPageState(currentUser) {
     }
     //The user is not fetched in the recent chats, or maybe the recent chats response is late or missing.
     //There can be still existing chat with this user 
-      console.log('Not found in recent chats', correspondentName)
       chatSessionEnvRef.current = new ChatSessionEnvironment(null, correspondentName)
       dispatch({type: 'SELECT_ACTIVE_CHAT',
         payload: {
@@ -237,6 +281,8 @@ export function useChatPageState(currentUser) {
   const setCounterPagination = useCallback(() => {
     dispatch({ type: 'SET_COUNTER_FOR_PAGINATION' })
   }, [])
+
+  
  function onTyping (peerUserName, chatRoomId, typing) {
   if(chatSessionEnvRef.current.state !== `existingChat`) return
     if (!activeChat || !currentUser) return
@@ -308,6 +354,7 @@ export function useChatPageState(currentUser) {
       chatSessionEnvRef,
       bufferOfPendingMessagesRef,
       optimisticMessagesByPeerRef,
+      messageStorageRef,
 
     },
   }

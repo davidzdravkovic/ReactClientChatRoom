@@ -96,13 +96,9 @@ export async function runImageMessageUploadPhases(file, dispatch, ctx) {
       throw new Error('Image upload INIT rejected')
     }
 
-    const putOk = await putTempMediaBlob(uploadId, file, mimeType)
+  
+    const putOk = await postMessageImageCommit(uploadId, file, mimeType)
     if (!putOk) {
-      throw new Error('Image PUT /media/temp failed')
-    }
-
-    const movedOk = await postMessageImageCommit(uploadId)
-    if (!movedOk) {
       throw new Error('Image POST /media/message/commit failed')
     }
 
