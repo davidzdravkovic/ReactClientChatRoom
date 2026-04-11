@@ -1,4 +1,5 @@
-const WS_URL = 'ws://localhost:12346/';
+/** Dev: direct to C++. Behind nginx: e.g. VITE_WS_URL=ws://localhost/ws */
+const WS_URL = import.meta.env.VITE_WS_URL || 'ws://localhost:12346/';
 
 let ws = null;
 let isReady = false;

@@ -101,57 +101,14 @@ Note: that line is the network step; the heading already says network phase. wha
     with the real message (server id, mediaId).
 
 
-*Reconsolidation of messages
-
-The ordering of the messages needs one extra feature, till know the ordering was perfect if the user receiving the messages is not sending a message or receiving a message.
-The problem is occuring when the user has not the last messages in the state or in local memory so for the sending message or receiving can not be merged accordinally so for that reason the user needs to have always the last message for that chat in case he sends the message,
-The idea is an extra memory location which is used for storage of always the last view of the messages. This is example of the workflow knowing some the rules that are established now this is needed for correct algorithm
 
 
-X - > state messages
-Y - > last messages
-
-For client A  making initial call the  server is always returning (is one endpoint and is constant in response -> one vector of initial messages for X and the other for last messages Y).
-Y is cross chats persistent memory it has a value pre initial call and value post initial call.
-
-The value pre-initial call are acumulative messages from the other client.
-The value post-initial call is a initial fetch that carries last messages.
- 
-So is correct to assume that a client A can write messages to our client even if the current client has not opened even once the chat with the A, so the messages received in this period are the last messages for this chat
-if we store them in the memory of Y then the server contract which is returning the last messages (does we need now to overwrite this Y  buffer immediatelly), what are the possible conflicts dependencies there can be created:
-  *There are 2 types of actions that can feed the Y storage one is MESSAGE RESPONSE and the other is initial FETCH MESSAGES RESPONSE which is overwritting always the Y buffer and is happening on every chat opening 
-  - MESSAGES RESPONSE can happen from login of the current User till the end of the session, and  FETCH MESSAGES RESPONSE happens only on selection for that chat.
-  - There is a time race that can happen when the current User can stay with wrong order, first location where the race is happening is DB which request will reach first the DB, the user issuing FETCH MESSAGE REQUEST or the client A issuing MESSAGE REQUEST.
-  - If the first request is MESSAGE REQUEST than the FETCH MESSAGE REQUEST will have in its own scope the message from MESSAGE REQUEST. 
- 1.In first case when the DB race order is finilaze in this order called #fetched including the message, the reponses can be received in those orders:
-  - FETCH MESSAGE RESPONSE  - >  MESSAGE RESPONSE  
-  - MESSAGE RESPONSE - > FETCH MESSAGE RESPONSE 
- *This is the case where the message response is included and is *duplicated, so it needs to be excluded. For that reason on appending the MESSAGE RESPONSE can append ONLY on smaller ID from the storage Y then itself, if the MESSAGE RESPONSE comes in second order,
- 2. In second case when the DB is reached in order when the FETCH MESSAGES REQUEST was first then the MESSAGE REQUEST the FETCH messages are excluding the message and the cases of the responses are:
-   - FETCH MESSAGE RESPONSE - > MESSAGE RESPONSE 
-   - MESSAGE RESPONSE - > FETCH MESSAGE RESPONSE
-* This use case gives us insight that we can not depend and give a type of response a privilige than other, so we need to to make a algorithm that is calculating each individual response and Y is a place of merging.
-
- The calucation is basically on inserting into Y and displaying from Y to X.
-Inserting can happen on 3 ways:
-1. Current User sending messages - MESSAGE_ACK_RESPONSE.
-2. Peer user is sending messages - MESSAGE_RESPONSE
-3. Current user is opening a chat INITIAL - FETCH_MESSAGE_RESPONSE
 
 
-The feature of pagination called #background pagination, is solving two problems:
-- messages correctness/consistency
-- reusability/optimisation
 
-1.Messages correctness.
-*The goal is consistence messages order
-That part is maintained by pagination mechanism "implementedPagination.txt" - Short resume what is established here: initial fetch can be updated with append and prepend safely, for the correct chat.
-Being backed with those safety guards which are giving solutions on two kinds of User inputs: scrolling, changing chats. There is also one User input that can disturb this mechanism from working safely and that is the sending messages.
 
-Why sending messages are special case and how to they are disturbing the correctness of the ordering, we need to know the core of how this mechanism is working "implementedSending.txt" - for Optimistic messages the storage needs to be updated with the message id
-on MESSAGE ACK RESPONSE
 
-What means to achieve consistancy, that means the user is loaded always with the correct initial messages 
+  
 
 
 

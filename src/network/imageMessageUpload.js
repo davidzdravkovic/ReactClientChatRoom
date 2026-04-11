@@ -46,9 +46,10 @@ export async function runImageMessageUploadPhases(file, dispatch, ctx) {
     sessionId,
     senderUserName,
     receiverUserName,
+    clientId: externalClientId,
   } = ctx
 
-  const clientId = nextClientTemporaryId()
+  const clientId = externalClientId ?? nextClientTemporaryId()
   const localPreviewUrl = URL.createObjectURL(file)
   const timeStr = new Date().toISOString()
 

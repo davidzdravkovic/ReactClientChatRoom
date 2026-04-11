@@ -1,0 +1,107 @@
+*Reconsolidation of messages
+
+The ordering of the messages needs one extra feature, till know the ordering was perfect if the user receiving the messages is not sending a message or receiving a message.
+The problem is occuring when the user has not the last messages in the state or in local memory so for the sending message or receiving can not be merged accordinally so for that reason the user needs to have always the last message for that chat in case he sends the message,
+The idea is an extra memory location which is used for storage of always the last view of the messages. This is example of the workflow knowing some the rules that are established now this is needed for correct algorithm
+
+
+X - > state messages
+Y - > last messages
+
+For client A  making initial call the  server is always returning (is one endpoint and is constant in response -> one vector of initial messages for X and the other for last messages Y).
+Y is cross chats persistent memory it has a value pre initial call and value post initial call.
+
+The value pre-initial call are acumulative messages from the other client.
+The value post-initial call is a initial fetch that carries last messages.
+ 
+So is correct to assume that a client A can write messages to our client even if the current client has not opened even once the chat with the A, so the messages received in this period are the last messages for this chat
+if we store them in the memory of Y then the server contract which is returning the last messages (does we need now to overwrite this Y  buffer immediatelly), what are the possible conflicts dependencies there can be created:
+  *There are 2 types of actions that can feed the Y storage one is MESSAGE RESPONSE and the other is initial FETCH MESSAGES RESPONSE which is overwritting always the Y buffer and is happening on every chat opening 
+  - MESSAGES RESPONSE can happen from login of the current User till the end of the session, and  FETCH MESSAGES RESPONSE happens only on selection for that chat.
+  - There is a time race that can happen when the current User can stay with wrong order, first location where the race is happening is DB which request will reach first the DB, the user issuing FETCH MESSAGE REQUEST or the client A issuing MESSAGE REQUEST.
+  - If the first request is MESSAGE REQUEST than the FETCH MESSAGE REQUEST will have in its own scope the message from MESSAGE REQUEST. 
+ 1.In first case when the DB race order is finilaze in this order called #fetched including the message, the reponses can be received in those orders:
+  - FETCH MESSAGE RESPONSE  - >  MESSAGE RESPONSE  
+  - MESSAGE RESPONSE - > FETCH MESSAGE RESPONSE 
+ *This is the case where the message response is included and is *duplicated, so it needs to be excluded. For that reason on appending the MESSAGE RESPONSE can append ONLY on smaller ID from the storage Y then itself, if the MESSAGE RESPONSE comes in second order,
+ 2. In second case when the DB is reached in order when the FETCH MESSAGES REQUEST was first then the MESSAGE REQUEST the FETCH messages are excluding the message and the cases of the responses are:
+   - FETCH MESSAGE RESPONSE - > MESSAGE RESPONSE 
+   - MESSAGE RESPONSE - > FETCH MESSAGE RESPONSE
+* This use case gives us insight that we can not depend and give a type of response a privilige than other, so we need to to make a algorithm that is calculating each individual response and Y is a place of merging.
+
+ The calucation is basically on inserting into Y and displaying from Y to X.
+Inserting can happen on 3 ways:
+1. Current User sending messages - MESSAGE_ACK_RESPONSE.
+2. Peer user is sending messages - MESSAGE_RESPONSE
+3. Current user is opening a chat INITIAL - FETCH_MESSAGE_RESPONSE
+
+
+The feature of pagination called #background pagination, is solving two problems:
+- messages correctness/consistency
+- reusability/optimisation
+
+##Messages correctness##
+*The goal is consistence messages order
+That part is maintained by pagination mechanism "implementedPagination.txt" - Short resume what is established here: initial fetch can be updated with append and prepend safely, for the correct chat.
+Being backed with those safety guards which are giving solutions on two kinds of User inputs: scrolling, changing chats. There is also one User input that can disturb this mechanism from working safely and that is the sending messages.
+
+Why sending messages are special case and how to they are disturbing the correctness of the ordering, we need to know the core of how this mechanism is working "implementedSending.txt" - for Optimistic messages the storage needs to be updated with the message id
+on MESSAGE ACK RESPONSE
+
+What means to achieve consistancy, that means the user is loaded always with the correct initial messages.
+
+This is the implementation of the background ordering or pagination, what we want to achieve in the first place is a rule that the user is not updated to the last_view of the chat unless writes a message or scrolls to the end.
+The chat can have two VIEWS starting with INITIAL_VIEW is when the arriving messages from the peer are not displayed to the user the user can scroll and be uninterupted. The user is making pagination is basically sliding to the chat.
+If the user decides to write a message or scrolls to the end and he is up to the last messages of the chat his view is upgraded to LAST_VIEW where he is in sync with the storage (place meant to store the last messages)
+LAST_VIEW is state where MESSAGE state is sync with STORAGE.
+The flow needs to go like this the STORAGE is place that has one job and that is to have the latest messages for that chat.
+
+#INITIAL FETCH/APPEND
+The chat is always starting with the INITIAL_VIEW when messages are arriving at the moment of the initial fetch 2 things are decided for that chat: STATE (NEW and  EXISTING) and VIEW (INITIAL_VIEW and LAST_VIEW)
+Initial fetch is carrying always a payload divided by a barrier left side of the barrier are initial messages and the right side are the last messages.
+The lifecycle starts on the first initial fetch, the transitions from INITIAL_VIEW to LAST_VIEW starts with this order:
+//Transtition manages to happen
+1.There are messages in the initial response paylaod
+- The last messages from the last part of the barrier are reconciliated with the messages from STORAGE.-
+- From the reconciliated STORAGE is taken the first message id and compared with the last message of the initial fetch (left side of the barrier)
+*The condition to happen transition from INITIAL_VIEW to LAST_VIEW is the message from initial fetch to be with larger id from the first of the reconciliated STORAGE
+If the condition is passed the initial fetch is merged with the last messags from the storage and that is the payload that entries into the state 
+
+2.There are no messages in initial fetch 
+If there are no messages that means that the chat is new and the client is up to the LAST_VIEW immediatelly, but there are cases where the 0 message payload does not suggest always new chat and in that case the VIEW transition is handled:
+- If in fetch send request it happens the other user to enters messages or the already user issuing the initial fetch receives the ACK or CHATROOM_ID response, then 0 messages initial fetch we still are making comparing with a state that is going to make:
+  2.1 New refetch initial if the user receives the ACK and CHATOOM_ID response in initial fetch response being inflight 
+  2.2 Checking the Storage for the MESSAGES_RESPONSES from the other client (14 are assumed that are maximum and insane large number to happen so it contains one page at least) -> The view in all of this cases is usually upgraded to LAST_VEIW.
+
+Side effect from this transition is that the client receiving messages is displayed into the state on condition LAST_VIEW
+
+//Transition failed to happen
+Then the user stays in INITIAL_VIEW meaning he can just issue a fetch requests and on each APPEND response the payload (here the API is that the payload is just carrying the asked messages) is compared with the STORAGE messages with the same style like initial fetch.
+If the comparasion happens to be satisfied for transition then transition happens to LAST_VIEW.
+
+#OPTIMISTIC MESSAGE
+
+The other way for transition to happens is if the client in any range of the chat writes a message.
+Transition in one session can happen only once.
+1.Optimistic message is differienting in the reference for reconciliation and that is lacking of MESSAGE_ID so for that reason they are all stored in TEMPORARYSTORAGE
+2.Is checked does the transition has already happen if that is the case they are dislayed immediatelly on the screen via updating OPTIMISTIC_RESPONSE.
+3.If the transition is not satisfied then is checked does at that moment has a request inFlight if it does a seed state becomes true for that session, if not storage messages are inserted in initial merge mode and OPTIMISTIC_RESPONSE is updating the state.
+4.For seed true the first FETCH message request is going to check this condition if that is the case is going to append there not just that messages that first made the seed true but in the range when the client can write  many messages, all there are stored
+in the TEMPORARYSTORAGE and they are added on the top of the STORAGE.
+
+*Reconciliation phase
+This phase is happening on MESSAGE_ACK_RESPONSE the message from this response is searching  based on the username with the TEMPORARY STORAGE
+1.Updates the messages that is there with the message id, the message is found based on the returned temporary id which needs to match then it inserts with reconciliation like a normal message in the STORAGE.
+
+
+The thing with the creation and deletion of the TEMPORARYSTORAGE, the first entry happens on the first sent message from the client. 
+The STORAGE LASTS to the end of the session if at that moment is with 0 lenght.
+The last ACK swiping the last temporary id fromt the TEMPORARYSTORAGE but before a reconciliation is made with the STORAGE then the TEMPRORARYSTORAGE is released from memory.
+
+//This SECTION describes only implementation of the CORRECTNESS of the order the OPTIMISATION is going to be resolved in the future//
+
+
+
+
+
+

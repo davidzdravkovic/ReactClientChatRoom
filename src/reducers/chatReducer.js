@@ -53,9 +53,9 @@ function recentChatRowFromAckMessage(message, { correspondentName, otherUserId, 
     correspondentName: correspondentNameResolved,
     lastMessage: message.Content,
     lastMessageTime: message.Time,
+    lastMessageHasMedia: message.mediaId ?? null,
     online: false,
     otherUserId: otherUserIdResolved,
-
   }
 }
 
@@ -159,11 +159,9 @@ export function chatReducer(state, action) {
       }
     }
 
-    case 'MESSAGE_ACK_RESPONSE':
-    case 'MESSAGE_RESPONSE': {
+    case 'CHAT_LIST_UPDATE': {
       const message = action.payload.data[0]
       const chatRoomId = message.chatroom_id
-      const peerUserName = message.Sender
 
       const ackMeta = {
         correspondentName: action.correspondentName,
@@ -179,6 +177,7 @@ export function chatReducer(state, action) {
             ...updatedChat,
             lastMessage: message.Content,
             lastMessageTime: message.Time,
+            lastMessageHasMedia: message.mediaId ?? null,
           },
           ...chats.filter((c) => c.chatRoomId !== chatRoomId),
         ]
@@ -189,42 +188,46 @@ export function chatReducer(state, action) {
         }
       }
 
-      let typingByChat = { ...state.typingByChat, [chatRoomId]: null }
+      const typingByChat = { ...state.typingByChat, [chatRoomId]: null }
 
-      let messages = state.messages
-      if(messages.length === 0 ) console.log(`messages are empty`)
-      //for now lets just update the message
-    
-       //The real bubble is excluding the temporary id 
-        const serverMsg = {
-          id: message.messageId,
-          content: message.Content,
-          senderId: message.SenderId,
-          time: message.Time,
-          mediaId: message.mediaId,
-        }
-        const tempId = message.temporaryId
-        console.log(`temporary ${tempId}`)
-        
-        //optimistic
-        if (tempId > 0) {
-            const idx = messages.findIndex( (msg) => Number(msg.temporaryId) === Number(tempId))
-          //normal id
-          console.log(`the index is ${idx}`)
-          if (idx >= 0) {
-            const next = [...messages]
-            const old = next[idx]
-            if (old?.localPreviewUrl) URL.revokeObjectURL(old.localPreviewUrl)
-            next[idx] = serverMsg
-            messages = next
-          } 
-        } //normal message
-        else {
-         if(peerUserName === state.activeChat?.correspondentName) messages = [...messages, serverMsg]
-        }
-      
+      return { ...state, chats, typingByChat }
+    }
 
-      return { ...state, chats, typingByChat, messages }
+    case 'MESSAGE_ACK_RESPONSE': {
+      const message = action.payload.data[0]
+      const tempId = message.temporaryId
+      if (!(tempId > 0)) return state
+
+      const serverMsg = {
+        id: message.messageId,
+        content: message.Content,
+        senderId: message.SenderId,
+        time: message.Time,
+        mediaId: message.mediaId,
+      }
+      const idx = state.messages.findIndex((msg) => Number(msg.temporaryId) === Number(tempId))
+      if (idx < 0) return state
+
+      const messages = [...state.messages]
+      const old = messages[idx]
+      if (old?.localPreviewUrl) URL.revokeObjectURL(old.localPreviewUrl)
+      messages[idx] = serverMsg
+      return { ...state, messages }
+    }
+
+    case 'MESSAGE_RESPONSE': {
+      const message = action.payload.data[0]
+      const peerUserName = message.Sender
+      if (peerUserName !== state.activeChat?.correspondentName) return state
+
+      const serverMsg = {
+        id: message.messageId,
+        content: message.Content,
+        senderId: message.SenderId,
+        time: message.Time,
+        mediaId: message.mediaId,
+      }
+      return { ...state, messages: [...state.messages, serverMsg] }
     }
 
     case 'ACTIVE_STATUS_RESPONSE': {

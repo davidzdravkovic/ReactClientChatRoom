@@ -2,6 +2,7 @@ import { useReducer, useEffect, useRef, useCallback } from 'react'
 import { createChatRoomDTO, createChatRetieve, createFetchDTO, createSeenDTO, createSendMessageStruct,createFirstMessageDTO, createTypingRequest } from '../Dto/dto'
 import { sendMessage, getSessionId } from '../network/wsConnection'
 import { runImageMessageUploadPhases } from '../network/imageMessageUpload'
+import { nextClientTemporaryId } from '../utils/nextClientTemporaryId'
 import { chatReducer, initialChatState } from '../reducers/chatReducer'
 import { ChatSessionEnvironment } from '../controllers/ChatSessionEnvironment'
 
@@ -34,6 +35,7 @@ export function useChatPageState(currentUser) {
   const chatSessionEnvRef = useRef(null)
   const bufferOfPendingMessagesRef = useRef({})
   const messageStorageRef = useRef({})
+  const temporaryStorageRef = useRef({})
 
   useEffect(() => {
     const chatRequest = createChatRoomDTO(currentUser.userId, getSessionId())
@@ -70,7 +72,9 @@ export function useChatPageState(currentUser) {
       if (prevEnv?.state === 'newChat' && prevPeerName && messageStorageRef.current[prevPeerName]) {
       delete messageStorageRef.current[prevPeerName]
     }
-
+    if (prevPeerName && temporaryStorageRef.current[prevPeerName]?.length === 0) {
+      delete temporaryStorageRef.current[prevPeerName]
+    }
   }
 
 
@@ -140,42 +144,37 @@ export function useChatPageState(currentUser) {
       console.log('Message sent before initial fetch for', chatSessionEnvRef.current?.peerUserName)
       return
     }
-    if (chatSessionEnvRef.current.firstOptimistic) {
-      const peer = chatSessionEnvRef.current.peerUserName
-      if (!messageStorageRef.current[peer]) messageStorageRef.current[peer] = []
-      messageStorageRef.current[peer].push({
-        Content: payload.content,
-        SenderId: payload.senderId,
-        Time: payload.time,
-        temporaryId: payload.temporaryId,
-      })
 
+//Always show the optimistic message
+ 
+      const peerUsername = chatSessionEnvRef.current.peerUserName
+      if(!temporaryStorageRef.current[peerUsername]) temporaryStorageRef.current[peerUsername] = []
+      temporaryStorageRef.current[peerUsername].push(payload)
+
+    
+
+      const optimistic = {
+        id: `temp-${payload.temporaryId}`,
+        content: payload.content,
+        senderId: payload.senderId,
+        time: payload.time,
+        temporaryId: payload.temporaryId,
+      }
+
+    //Transition to the last view 
+    //All messages after the while the state is inFlight are just storing in temp Storage and released on first FETCH RESPONSE
+    if (chatSessionEnvRef.current.chatView === `initial`) {
       if (!chatSessionEnvRef.current.pagination.inFlight) {
-        const formatted = messageStorageRef.current[peer].map(m => ({
-          id: m.messageId ?? `temp-${m.temporaryId}`,
-          content: m.Content,
-          senderId: m.SenderId,
-          time: m.Time,
-          mediaId: m.mediaId,
-          chatRoomId: m.chatroom_id,
-          temporaryId: m.temporaryId,
-        }))
-        dispatch({ type: 'SEED_FROM_STORAGE', payload: formatted })
+        chatSessionEnvRef.current.chatView = `last_view`
+        dispatch({ type: 'FETCH_MESSAGES_RESPONSE', payload: { data: [...(messageStorageRef.current[peerUsername] ?? [])] }, mergeMode: 'initial' })
+        dispatch({ type: 'OPTIMISTIC_MESSAGE', payload: optimistic })
       } else {
         chatSessionEnvRef.current.pendingSeed = true
       }
-      chatSessionEnvRef.current.firstOptimistic = false
-    } else {
-      dispatch({
-        type: 'OPTIMISTIC_MESSAGE',
-        payload: {
-          id: `temp-${payload.temporaryId}`,
-          content: payload.content,
-          senderId: payload.senderId,
-          time: payload.time,
-          temporaryId: payload.temporaryId,
-        },
-      })
+      
+    }
+    else {
+      dispatch({ type: 'OPTIMISTIC_MESSAGE', payload: optimistic })
     }
 
      if(chatSessionEnvRef.current?.state === 'newChat') { 
@@ -194,7 +193,7 @@ export function useChatPageState(currentUser) {
          return
       }
       else if(chatSessionEnvRef.current.subState === `firstMessageSent`) {
-        console.log('Subsequent message sent for new chat with', chatSessionEnvRef.current.peerUserName)
+    
         const pendingByPeer = bufferOfPendingMessagesRef.current
         const key = payload.correspondentName
         if (!pendingByPeer[key]) pendingByPeer[key] = []
@@ -219,7 +218,7 @@ export function useChatPageState(currentUser) {
    sendMessage(JSON.stringify(req))
     }
 
-  }, [])
+  }, []) 
 
   const requestGalleryImages = useCallback(() => {
     if (!activeChat || !currentUser) return
@@ -304,12 +303,35 @@ export function useChatPageState(currentUser) {
       if (!file || !currentUser?.userId) return
       const chat = activeChatRef.current
       if (chatSessionEnvRef.current?.state !== 'existingChat') return
+
+      const env = chatSessionEnvRef.current
+      const peerUsername = env.peerUserName
+      const clientId = nextClientTemporaryId()
+
+      if (!temporaryStorageRef.current[peerUsername]) temporaryStorageRef.current[peerUsername] = []
+      temporaryStorageRef.current[peerUsername].push({
+        temporaryId: clientId,
+        senderId: currentUser.userId,
+        content: ' ',
+        time: new Date().toISOString(),
+      })
+
+      if (env.chatView === 'initial') {
+        if (!env.pagination.inFlight) {
+          env.chatView = 'last_view'
+          dispatch({ type: 'FETCH_MESSAGES_RESPONSE', payload: { data: [...(messageStorageRef.current[peerUsername] ?? [])] }, mergeMode: 'initial' })
+        } else {
+          env.pendingSeed = true
+        }
+      }
+
       try {
         await runImageMessageUploadPhases(file, dispatch, {
           userId: currentUser.userId,
           sessionId: getSessionId(),
           senderUserName: currentUser.userName,
           receiverUserName: chat.correspondentName,
+          clientId,
         })
       } 
       catch (e) {
@@ -355,6 +377,7 @@ export function useChatPageState(currentUser) {
       bufferOfPendingMessagesRef,
       optimisticMessagesByPeerRef,
       messageStorageRef,
+      temporaryStorageRef,
 
     },
   }

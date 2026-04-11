@@ -6,6 +6,7 @@ const TYPING_STALE_MS = 5000
 const MESSAGE_STORAGE_WINDOW = 14
 
 function capMessageWindow(list, max = MESSAGE_STORAGE_WINDOW) {
+  console.log(`list: ${list.length}`)
   if (list.length <= max) return list
   //Before indexes of the result = lenght - max are dropped after are keept
   return list.slice(list.length - max)
@@ -20,10 +21,38 @@ export function useChatSubscription(
   bufferOfPendingMessagesRef,
   chatSessionEnvRef,
   messageStorageRef,
+  temporaryStorageRef,
 ) {
   const dispatcherRef = useRef(dispatch)
   dispatcherRef.current = dispatch
 
+  function updateTempStorage(data, peerUserName) {
+    const temporaryIds = temporaryStorageRef.current?.[peerUserName]
+    if(!temporaryIds) return
+
+    const message = data[0]
+    const tempId = message.temporaryId
+
+    const serverMsg = {
+      messageId: message.messageId,
+      Content: message.Content,
+      SenderId: message.SenderId,
+      Time: message.Time,
+      mediaId: message.mediaId,
+      chatroom_id: message.chatroom_id,
+      Sender: message.receiverUserName,
+    }
+    const index = temporaryIds.findIndex((m) => m.temporaryId === tempId)
+    if (index === -1) return
+    temporaryIds.splice(index, 1)
+      console.log(`hereee udpdate ${serverMsg.content}`)
+
+    appendLastMessageStorage(serverMsg)
+
+    if (temporaryIds.length === 0 && peerUserName !== chatSessionEnvRef.current?.peerUserName) {
+      delete temporaryStorageRef.current[peerUserName]
+    }
+  }
 
   function fanOutBuffereMessages(otherUserName,chatRoomId) {
       //The peer name can be different at this point so the DTO needs to carry the username of the peer
@@ -69,6 +98,7 @@ export function useChatSubscription(
 
   function appendLastMessageStorage(message) {
   const username = message.Sender
+  console.log(`hereee append ${message.id}`)
   if (!username) return
 
   if (!messageStorageRef.current[username])  messageStorageRef.current[username] = []
@@ -88,7 +118,7 @@ export function useChatSubscription(
     }
   }
 
-  
+    console.log(`hereee append ${message.content}`)
   if (!inserted) {
     //If the message is the smallest is added in front
     list.unshift(message)
@@ -102,10 +132,32 @@ export function useChatSubscription(
 
  
   /**
+   * If the page's newest message reaches into the storage window, merge the
+   * storage tail onto the page and switch to last_view. Returns true on transition.
+   */
+  function tryTransitionToLastView(env, data) {
+    const storage = messageStorageRef.current[env.peerUserName] ?? []
+    if (storage.length === 0) return { transitioned: false, merged: data }
+
+    if (data.length === 0) {
+      env.chatView = 'last_view'
+      return { transitioned: true, merged: [...storage] }
+    }
+
+    const pageLastId = data[data.length - 1]?.messageId
+    const storageFirstId = storage[0]?.messageId
+    if (pageLastId == null || pageLastId < storageFirstId) return { transitioned: false, merged: data }
+
+    const storageTail = storage.filter(m => m.messageId > pageLastId)
+    env.chatView = 'last_view'
+    return { transitioned: true, merged: [...data, ...storageTail] }
+  }
+
+  /**
    * Merge the trailing slice from FETCH (`messages`) with `messageStorageRef` for this peer.
    * Returns the new storage array (caller assigns to the ref).
    */
-  function reconsidilation(messages, peerUserName) {
+  function reconciliation(messages, peerUserName) {
     if (!messageStorageRef.current[peerUserName]) {
       messageStorageRef.current[peerUserName] = []
     }
@@ -189,25 +241,32 @@ export function useChatSubscription(
               const env = chatSessionEnvRef.current
               if (!env) return
               const echoed = msgData.data.find((m) => m.chatIdentifier)?.chatIdentifier ?? null
-              const { validSession, mergeMode } = env.fetchResponseCheck(echoed)
+              //returns if it is valid session the mergde mode and inside is setting inflight to false
+              const { validSession, mergeMode: _mergeMode } = env.fetchResponseCheck(echoed)
+              let mergeMode = _mergeMode
               
              if (!validSession) return
 
         
 
               const peerUserId = msgData.data.find((m) => m.otherUserId != null)?.otherUserId ?? null
-              const barier = msgData.data.find((m)=> m.endOfInitialSize != null)?.endOfInitialSize ?? null
+              const barrier = msgData.data.find((m)=> m.endOfInitialSize != null)?.endOfInitialSize ?? null
               const sizeOfData = msgData.data.length
 
              // Take lastMessages first, then slice the initial messages
+              const lastMessages = msgData.data.slice(barrier +1, sizeOfData)
+              msgData.data = msgData.data.slice(0, barrier)
+              //Last messages from server payload are extracted in lastMessage
+              //Cuase the last messages from the server can not be the only truth after read DB a user can receive or send temp messages
+              //The reconciliation function merges them based on the message ID value.
+              messageStorageRef.current[env.peerUserName]= reconciliation(lastMessages, env.peerUserName)
+              if (mergeMode === 'append') {
+                const { transitioned, merged } = tryTransitionToLastView(env, msgData.data)
+                msgData.data = merged
+                if (transitioned) mergeMode = 'initial'
+              }
 
-              const lastMessages = msgData.data.slice(barier +1, sizeOfData)
-              msgData.data = msgData.data.slice(0, barier)
-              const finalStorageMessages = reconsidilation(lastMessages, env.peerUserName)
-              //What if is new chat do we need fisrst to create the entry or this is creating if does not exists ?
-              messageStorageRef.current[env.peerUserName] = finalStorageMessages
-      
-
+    
           if (!activeChatRef.current.initialFetchDone) {
             let lastInitialFetch = true
             const chatRoomId = msgData.data.find((m) => m.chatroom_id != null)?.chatroom_id ?? null
@@ -216,6 +275,9 @@ export function useChatSubscription(
               if (activeChatRef.current.chatRoomId === null) activeChatRef.current.chatRoomId = chatRoomId
               env.chatRoomId = chatRoomId
               env.state = 'existingChat'
+             //It caries however the initial fetch type
+                const { merged } = tryTransitionToLastView(env, msgData.data)
+                msgData.data = merged
             }
             //NEWCHAT 
             else {
@@ -223,6 +285,7 @@ export function useChatSubscription(
               if (!env.chatAcknowledge && !hasMessage ) {
               env.state = 'newChat'
               env.subState = 'noFirstMessageSent'
+              env.chatView = `last_view`
               }
               else if(env.chatAcknowledge) {
                 //refetch for to refetch the first message sent
@@ -238,11 +301,12 @@ export function useChatSubscription(
                const firstMessage = messageStorageRef?.current[env.peerUserName][0]
                activeChatRef.current.chatRoomId = firstMessage.chatroom_id
                env.chatRoomId = firstMessage.chatroom_id 
-              env.state = 'existingChat' 
+               env.state = 'existingChat' 
               //Add the message from the storage with the initial all 14 or below
                const storageMessages = messageStorageRef?.current[env.peerUserName]
                //I need to be carefull how i gave the messages to fetch cause expects certain format 
                msgData.data = storageMessages
+               env.chatView = `last_view`
               }
             }     
             if(lastInitialFetch) 
@@ -253,23 +317,31 @@ export function useChatSubscription(
             dispatch({ type: 'UPDATE_ACTIVE_CHAT', payload: activeChatRef.current })
               }
           }
+          //Dispatch is updating the message state can be updated by pagination and by writing 
+          //Just writing needs a guard to check to update the state, Fetch updates to state are common 
+          // in initial_view and they could happen in last_view 
           dispatch({ type: 'FETCH_MESSAGES_RESPONSE', payload: msgData, mergeMode })
 
           if (env.pendingSeed) {
             env.pendingSeed = false
-            const raw = messageStorageRef.current[env.peerUserName] ?? []
-            const formatted = raw.map(m => ({
-              id: m.messageId ?? `temp-${m.temporaryId}`,
+            chatSessionEnvRef.current.chatView = `last_view`
+            const stored = (messageStorageRef.current[env.peerUserName] ?? []).map(m => ({
+              id: m.messageId,
               content: m.Content,
               senderId: m.SenderId,
               time: m.Time,
               mediaId: m.mediaId,
               chatRoomId: m.chatroom_id,
-              temporaryId: m.temporaryId,
             }))
-            if (formatted.length > 0) {
-              dispatcherRef.current({ type: 'SEED_FROM_STORAGE', payload: formatted })
-            }
+            const temps = (temporaryStorageRef.current[env.peerUserName] ?? []).map(t => ({
+              id: `temp-${t.temporaryId}`,
+              content: t.content,
+              senderId: t.senderId,
+              time: t.time,
+              temporaryId: t.temporaryId,
+            }))
+            dispatch({ type: 'SEED_FROM_STORAGE', payload: [...stored, ...temps] })
+        
           }
           
           break
@@ -308,10 +380,13 @@ export function useChatSubscription(
         case 'MESSAGE_RESPONSE': {
           const chatRoomid = msgData.data.find((m) => m.chatroom_id != null)?.chatroom_id ?? null
           const otherUserId = msgData.data.find((m) => m.SenderId != null)?.SenderId ?? null
+          let rightChat = false
+          const env = chatSessionEnvRef.current
 
           if (msgData.response === `MESSAGE_RESPONSE`) {
             const otherUserName = msgData.data.find((m) => m.Sender != null)?.Sender ?? null
             const message = msgData.data.find((m) => m.messageId != null)
+             rightChat = (otherUserName === env?.peerUserName) && (env?.chatView === `last_view`)
             appendLastMessageStorage(message)
             setUpIfFirstMessage(otherUserName, chatRoomid, otherUserId)
           } 
@@ -320,17 +395,29 @@ export function useChatSubscription(
             if(!activeChatRef.current.initialFetchDone && otherUserName === chatSessionEnvRef.current.peerUserName) {
               chatSessionEnvRef.current.chatAcknowledge = true
             }
+            updateTempStorage(msgData.data, otherUserName)
             setUpIfFirstMessage(otherUserName, chatRoomid, otherUserId)
           }
-
-          dispatch({
-            type: msgData.response,
+   
+          
+          const dispatchMeta = {
             payload: msgData,
             activeChatId: activeChatRef.current?.chatRoomId,
             correspondentName: activeChatRef.current?.correspondentName,
             otherUserId: activeChatRef.current?.otherUserId,
             currentUserId: currentUser?.userId,
-          })
+          }
+        
+        
+          //Does MESSAGE ACK needs to update the chat bar or the optimistic 
+          //i think the optimistic is better
+          dispatch({ type: 'CHAT_LIST_UPDATE', ...dispatchMeta })
+
+          
+
+          if (rightChat || msgData.response === 'MESSAGE_ACK_RESPONSE') {
+            dispatch({ type: msgData.response, ...dispatchMeta })
+          }
           break
         }
 

@@ -10,6 +10,7 @@ export class ChatSessionEnvironment {
   static nextConversationEpoch = 0
 
   constructor(chatRoomId, correspondentName) {
+    this.chatView =`initial`
     this.subState = null
     this.chatAcknowledge = false
     this.firstOptimistic = true

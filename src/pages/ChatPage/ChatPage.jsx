@@ -19,6 +19,7 @@ function ChatPage({ currentUser, onLogout }) {
     chatSessionEnvRef,
     bufferOfPendingMessagesRef,
     messageStorageRef,
+    temporaryStorageRef,
   } = subscriptionDeps
 
   useChatSubscription(
@@ -30,6 +31,7 @@ function ChatPage({ currentUser, onLogout }) {
     bufferOfPendingMessagesRef,
     chatSessionEnvRef,
     messageStorageRef,
+    temporaryStorageRef,
   )
 
   const {

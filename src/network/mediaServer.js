@@ -7,7 +7,8 @@
  * - GET  /media/message/:mediaId   — read message attachment
  */
 
-const MEDIA_BASE = 'http://localhost:8081'
+/** Dev: direct to media process. Behind nginx: e.g. VITE_MEDIA_BASE=http://localhost */
+const MEDIA_BASE = import.meta.env.VITE_MEDIA_BASE || 'http://localhost:8081'
 
 /**
  * Fetch profile picture for a user. Returns object URL for the image or null on 404/error.
