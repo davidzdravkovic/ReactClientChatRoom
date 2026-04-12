@@ -70,12 +70,17 @@ function SignUpPage({ onNavigateToLogin, onLogin }) {
       const isFailure = msg.response === 'CREATE_RESPONSE' && msg.status !== 'SUCCESS'
 
       if (isSuccess) {
-        localStorage.setItem('sessionId', String(getSessionId()))
         const userData = Array.isArray(msg.data) && msg.data[0] ? msg.data[0] : {}
+        const token = userData.token
+        if (token) {
+          localStorage.setItem('jwt', token)
+        }
+        localStorage.setItem('sessionId', String(getSessionId()))
         onLogin?.({
           userName: userData.userName ?? username,
           fullName: userData.name ?? fullName,
           userId: userData.userId != null ? Number(userData.userId) : null,
+          token: token ?? null,
         })
         unsubscribe()
       } else if (isFailure) {
@@ -85,7 +90,7 @@ function SignUpPage({ onNavigateToLogin, onLogin }) {
       }
     })
 
-    sendMessage(JSON.stringify(createDTO))
+    sendMessage(JSON.stringify(createDTO), { attachToken: false })
   }
 
   return (

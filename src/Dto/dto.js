@@ -57,7 +57,6 @@ export function createChatRoomDTO(userID, sessionId = 0) {
     SessionId: sessionId,
     request: "RECENT_CHATROOM_REQUEST",
     data: {
-      userID
     }
   };
 }
@@ -71,7 +70,6 @@ export function createSendMessageStruct(senderUserName, receiverUserName, conten
       senderUserName,
       receiverUserName,
       content,
-      senderId,
       chatroom_id,
       temporaryId
     }
@@ -86,7 +84,6 @@ export function createTypingRequest(receiverUser, senderUserName, senderId, chat
     data: {
       receiverUser,
       senderUserName,
-      senderId,
       chatroom_id,
       typing
     }
@@ -100,7 +97,6 @@ export function createSeenDTO(chatroom_id, user_id, last_seen_message_id, sessio
     request: "SEEN_REQUEST",
     data: {
       chatroom_id,
-      user_id,
       last_seen_message_id
     }
   };
@@ -113,14 +109,12 @@ export function createFetchDTO(chatroom_id, user_id, sessionId = 0) {
     request: "FETCH_IMAGES_FOR_CHAT_REQUEST",
     data: {
       chatroom_id,
-      user_id
     }
   };
 }
 
 /** Chat image message — phase 1 (matches DeserializeMediaMessage INIT). */
 export function createUploadImageMessageInit(
-  userId,
   clientId,
   mimeType,
   fileSizeBytes,
@@ -130,7 +124,6 @@ export function createUploadImageMessageInit(
     SessionId: sessionId,
     request: 'UPLOAD_IMAGE_MESSAGE_REQUEST',
     data: {
-      userId,
       stage: 'INIT',
       clientId,
       mimeType,
@@ -141,7 +134,6 @@ export function createUploadImageMessageInit(
 
 /** After PUT /media/temp and POST /media/message/commit — creates PENDING_MEDIA message in DB. */
 export function createUploadImageMessageCommit(
-  userId,
   clientId,
   uploadId,
   senderUserName,
@@ -152,7 +144,6 @@ export function createUploadImageMessageCommit(
     SessionId: sessionId,
     request: 'UPLOAD_IMAGE_MESSAGE_REQUEST',
     data: {
-      userId,
       stage: 'COMMIT',
       clientId,
       uploadId,
@@ -167,7 +158,6 @@ export function createUploadImageMessageCommit(
  * `messageTempId` must match the optimistic row's `temporaryId` (same as INIT `clientId`).
  */
 export function createUploadImageMessageFinalize(
-  userId,
   clientId,
   messageTempId,
   uploadId,
@@ -179,7 +169,6 @@ export function createUploadImageMessageFinalize(
     SessionId: sessionId,
     request: 'UPLOAD_IMAGE_MESSAGE_REQUEST',
     data: {
-      userId,
       stage: 'FINALIZE',
       clientId,
       messageTempId,
@@ -192,7 +181,6 @@ export function createUploadImageMessageFinalize(
 
 /** Profile image: phase 1 — server creates TEMP media row, returns uploadId (media id). */
 export function createUploadProfilePictureInit(
-  userId,
   mimeType,
   fileSizeBytes,
   sessionId = 0,
@@ -201,7 +189,6 @@ export function createUploadProfilePictureInit(
     SessionId: sessionId,
     request: 'UPLOAD_PROFILE_PICTURE_REQUEST',
     data: {
-      userId,
       stage: 'INIT',
       mimeType,
       fileSizeBytes,
@@ -215,7 +202,6 @@ export function createUploadProfilePictureCommit(userId, uploadId, sessionId = 0
     SessionId: sessionId,
     request: 'UPLOAD_PROFILE_PICTURE_REQUEST',
     data: {
-      userId,
       stage: 'COMMIT',
       uploadId,
     },
@@ -230,7 +216,6 @@ export function createFirstMessageDTO(senderUserName, receiverUserName, content,
       senderUserName,
       receiverUserName,
       content,
-      senderId,
       temporaryId
     }
   };

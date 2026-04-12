@@ -50,6 +50,8 @@ function App() {
       <ChatPage
         currentUser={currentUser}
         onLogout={() => {
+          localStorage.removeItem('jwt')
+          localStorage.removeItem('sessionId')
           setCurrentUser(null)
           setPage('login')
         }}

@@ -49,7 +49,7 @@ export async function runProfilePictureUploadPhases(file, userId, sessionId) {
 
   sendMessage(
     JSON.stringify(
-      createUploadProfilePictureInit(userId, mimeType, fileSizeBytes, sessionId),
+      createUploadProfilePictureInit(mimeType, fileSizeBytes, sessionId),
     ),
   )
 

@@ -97,10 +97,27 @@ function handleGeneralMessage(event) {
   messageListeners.forEach((cb) => cb(event));
 }
 
-// ---- Send binary message ----
-export function sendMessage(data) {
+// ---- Send JSON over WebSocket (optional JWT; sessionId stays in the DTO) ----
+export function sendMessage(data, { attachToken = true } = {}) {
   if (ws && ws.readyState === WebSocket.OPEN) {
-    ws.send(data);
+    const token = localStorage.getItem('jwt');
+
+    let payload;
+
+    if (typeof data === 'object') {
+      payload = attachToken && token ? { ...data, token } : data;
+    } else {
+      try {
+        const parsed = JSON.parse(data);
+        payload = attachToken && token ? { ...parsed, token } : parsed;
+      } catch {
+        payload = data;
+      }
+    }
+
+    ws.send(
+      typeof payload === 'string' ? payload : JSON.stringify(payload)
+    );
   } else {
     console.warn('WebSocket not open, cannot send message');
   }

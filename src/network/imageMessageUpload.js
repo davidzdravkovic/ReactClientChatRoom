@@ -72,13 +72,7 @@ export async function runImageMessageUploadPhases(file, dispatch, ctx) {
 
     sendMessage(
       JSON.stringify(
-        createUploadImageMessageInit(
-          userId,
-          clientId,
-          mimeType,
-          fileSizeBytes,
-          sessionId,
-        ),
+        createUploadImageMessageInit(clientId, mimeType, fileSizeBytes, sessionId),
       ),
     )
 
@@ -106,7 +100,6 @@ export async function runImageMessageUploadPhases(file, dispatch, ctx) {
     sendMessage(
       JSON.stringify(
         createUploadImageMessageCommit(
-          userId,
           clientId,
           uploadId,
           senderUserName,
@@ -129,7 +122,6 @@ export async function runImageMessageUploadPhases(file, dispatch, ctx) {
     sendMessage(
       JSON.stringify(
         createUploadImageMessageFinalize(
-          userId,
           clientId,
           clientId,
           uploadId,

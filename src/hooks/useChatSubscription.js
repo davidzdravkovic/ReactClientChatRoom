@@ -1,6 +1,6 @@
 import { useEffect, useRef } from 'react'
 import { createSendMessageStruct } from '../Dto/dto'
-import { subscribeMessages,sendMessage } from '../network/wsConnection'
+import { subscribeMessages, sendMessage, getSessionId } from '../network/wsConnection'
 
 const TYPING_STALE_MS = 5000
 const MESSAGE_STORAGE_WINDOW = 14
@@ -65,7 +65,7 @@ export function useChatSubscription(
                 pending.senderId,
                 chatRoomId,
                 pending.temporaryId,
-                pending.getSessionId,
+                getSessionId(),
               )
               sendMessage(JSON.stringify(req))
             })

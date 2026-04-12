@@ -16,57 +16,88 @@ function LoginPage({ onNavigateToSignup, onLogin }) {
     return () => unsubscribe();
   }, []);
 
-  const handleSubmit = (e) => {
-    e.preventDefault();
+const handleSubmit = (e) => {
+  e.preventDefault();
 
-    if (!connection) {
-      setConnectionError(true);
-      return;
-    }
+  if (!connection) {
+    setConnectionError(true);
+    return;
+  }
 
-    const username = e.target.username.value;
-    const password = e.target.password.value;
+  const username = e.target.username.value;
+  const password = e.target.password.value;
 
-    if (!username) { alert("Username is required"); return; }
-    if (!password) { alert("Password is required"); return; }
+  if (!username) {
+    alert("Username is required");
+    return;
+  }
 
-  // 1. Create the login DTO
+  if (!password) {
+    alert("Password is required");
+    return;
+  }
+
+  // 1. Create login DTO
   const loginDTO = createLogStruct(username, password, getSessionId());
 
-  // 2. Set up a listener for the server response
+  // 2. Subscribe to server response
   const unsubscribe = subscribeMessages((payload) => {
-
     let msg;
+
     try {
-      msg = typeof payload.data === 'string' ? JSON.parse(payload.data) : payload.data;
+      msg = typeof payload.data === "string"
+        ? JSON.parse(payload.data)
+        : payload.data;
     } catch {
       return;
     }
+
     if (!msg) return;
 
-    // Server sends { response: "LOGIN_RESPONSE", status: "SUCCESS", data: [{ userName, userId, name, email }] }
-    const isSuccess = msg.response === 'LOGIN_RESPONSE' && msg.status === 'SUCCESS';
-    const isFailure = msg.response === 'LOGIN_RESPONSE' && msg.status !== 'SUCCESS';
+    const isSuccess =
+      msg.response === "LOGIN_RESPONSE" && msg.status === "SUCCESS";
+
+    const isFailure =
+      msg.response === "LOGIN_RESPONSE" && msg.status !== "SUCCESS";
 
     if (isSuccess) {
-      localStorage.setItem('sessionId', String(getSessionId()));
-      const userData = Array.isArray(msg.data) && msg.data[0] ? msg.data[0] : {};
+      const userData =
+        Array.isArray(msg.data) && msg.data[0] ? msg.data[0] : {};
+
+      // ✅ STORE TOKEN
+      const token = userData.token;
+      if (token) {
+        localStorage.setItem("jwt", token);
+      }
+
+      localStorage.setItem("sessionId", String(getSessionId()));
+
+      // ✅ PASS EVERYTHING TO APP STATE
       onLogin?.({
         userName: userData.userName ?? username,
         fullName: userData.name ?? userData.userName ?? username,
         userId: userData.userId != null ? Number(userData.userId) : null,
+        token: token ?? null,
       });
-    } else if (isFailure) {
-      const err = msg.data?.[0]?.error ?? msg.error ?? 'Invalid credentials';
-      alert('Login failed: ' + err);
+
+      unsubscribe();
+      return;
     }
-     unsubscribe();
+
+    if (isFailure) {
+      const err =
+        msg.data?.[0]?.error ?? msg.error ?? "Invalid credentials";
+
+      alert("Login failed: " + err);
+
+      unsubscribe();
+      return;
+    }
   });
 
-  // 3. Send the login request over WebSocket
-  sendMessage(JSON.stringify(loginDTO));
+  // 3. Send login request (no JWT — user is not authenticated yet)
+  sendMessage(JSON.stringify(loginDTO), { attachToken: false });
 };
-
   return (
     <div className="login-page">
       <div className="login-left">
