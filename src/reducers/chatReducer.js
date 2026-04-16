@@ -1,3 +1,5 @@
+import { devLog, devWarn } from '../utils/logger'
+
 export const initialChatState = {
   chats: [],
   messages: [],
@@ -9,6 +11,8 @@ export const initialChatState = {
   lastSeenMessageIdByChat: {},
   fullScreenImageUrl: null,
   counter: 0,
+  /** @type {{ id: number, message: string, variant?: string } | null} */
+  chatAlert: null,
 }
 
 /** Non-zero media id from server; null if absent or 0. */
@@ -72,7 +76,7 @@ function parseFetchedMessages(data) {
   // Take only the initial messages
   const messages =
     endOfInitialSize != null ? data.slice(0,  barrierIndex) : data
-    console.log(`does the payload matches: ${data.length} is equal to ${messages.length}`)
+    devLog(`does the payload matches: ${data.length} is equal to ${messages.length}`)
     const messageList = messages.filter((m)=> m.messageId != null)
     
 
@@ -262,8 +266,8 @@ export function chatReducer(state, action) {
     case 'SELECT_ACTIVE_CHAT':
       return { ...state, activeChat: action.payload, messages: [] }
 
-      case `UPDATE_ACTIVE_CHAT`:
-        return {...state, activeChat: action.payload}
+    case 'UPDATE_ACTIVE_CHAT':
+      return { ...state, activeChat: action.payload ?? null }
 
 
     case 'SEED_FROM_STORAGE': {
@@ -301,8 +305,21 @@ export function chatReducer(state, action) {
     case `SET_COUNTER_FOR_PAGINATION`:
        return {...state, counter : state.counter + 1}  
 
+    case 'SHOW_CHAT_ALERT':
+      return {
+        ...state,
+        chatAlert: {
+          id: Date.now(),
+          message: action.message,
+          variant: action.variant ?? 'error',
+        },
+      }
+
+    case 'CLEAR_CHAT_ALERT':
+      return { ...state, chatAlert: null }
+
     default:
-      console.warn('Unhandled action type:', action.type)
+      devWarn('Unhandled action type:', action.type)
       return state
   }
 }

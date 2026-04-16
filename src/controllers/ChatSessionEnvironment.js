@@ -23,14 +23,15 @@ export class ChatSessionEnvironment {
   }
 
   fetchResponseCheck(echoedChatIdentifier) {
-    const stale =
-      echoedChatIdentifier !== undefined &&
-      echoedChatIdentifier !== this.conversationEpoch
-    const validSession = !stale
     const mergeMode = this.pagination.fetchType ?? 'initial'
-    if (validSession) {
-      this.pagination.onFetchResponse()
-    }
+    const n =
+      echoedChatIdentifier != null && echoedChatIdentifier !== ''
+        ? Number(echoedChatIdentifier)
+        : NaN
+    // Missing or non-matching epoch → same class of error as "no session" (ignore payload, do not merge).
+    const validSession =
+      Number.isFinite(n) && n > 0 && n === this.conversationEpoch
+    this.pagination.onFetchResponse()
     return { validSession, mergeMode }
   }
 

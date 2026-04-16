@@ -9,6 +9,15 @@ export function createLogStruct(username, password, sessionId = 0) {
   }
 }
 
+/** Server: explicit user logout (authenticated); clears online registry for this WebSocket session. */
+export function createLogoutRequest(sessionId = 0) {
+  return {
+    SessionId: sessionId,
+    request: 'LOGOUT_REQUEST',
+    data: {},
+  }
+}
+
 /** Same envelope as login: SessionId + request + data. Server: CREATE_REQUEST → CREATE_RESPONSE. */
 export function createCreateStruct(userName, password, name, email, sessionId = 0) {
   return {

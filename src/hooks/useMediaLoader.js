@@ -2,6 +2,7 @@ import { useState, useCallback, useEffect, useRef } from 'react'
 import { fetchProfileImage, fetchMessageImage } from '../network/mediaServer'
 import { getSessionId } from '../network/wsConnection'
 import { runProfilePictureUploadPhases } from '../network/profilePictureUpload'
+import { devError, devWarn } from '../utils/logger'
 
 export function useMediaLoader(currentUser, chats, activeChat, messages) {
 
@@ -155,7 +156,7 @@ export function useMediaLoader(currentUser, chats, activeChat, messages) {
     if (!currentUser?.userId || !file) return
     const sid = getSessionId()
     if (sid == null) {
-      console.warn('No WebSocket session; cannot upload profile picture')
+      devWarn('No WebSocket session; cannot upload profile picture')
       return
     }
     try {
@@ -168,7 +169,7 @@ export function useMediaLoader(currentUser, chats, activeChat, messages) {
         return { ...prev, [currentUser.userId]: url || null }
       })
     } catch (e) {
-      console.error('Profile picture upload failed:', e)
+      devError('Profile picture upload failed:', e)
     }
   }, [currentUser?.userId])
 

@@ -1,7 +1,14 @@
 import './LoginPage.css'
 import { createLogStruct } from "../../Dto/dto";
 import {useState,useEffect} from 'react';
-import { getSessionId, sendMessage,  subscribeMessages,subscribeConnection} from "../../network/wsConnection";
+import {
+  connect,
+  getSessionId,
+  sendMessage,
+  subscribeMessages,
+  subscribeConnection,
+  subscribeDisconnection,
+} from "../../network/wsConnection";
 
 
 function LoginPage({ onNavigateToSignup, onLogin }) {
@@ -9,11 +16,19 @@ function LoginPage({ onNavigateToSignup, onLogin }) {
   const [connectionError, setConnectionError] = useState(false);
 
   useEffect(() => {
-    const unsubscribe = subscribeConnection(() => {
+    connect()
+    const unsubConn = subscribeConnection(() => {
       setConnection(true);
       setConnectionError(false);
     });
-    return () => unsubscribe();
+    const unsubDisc = subscribeDisconnection(() => {
+      setConnection(false);
+      connect();
+    });
+    return () => {
+      unsubConn();
+      unsubDisc();
+    };
   }, []);
 
 const handleSubmit = (e) => {
@@ -67,10 +82,10 @@ const handleSubmit = (e) => {
       // ✅ STORE TOKEN
       const token = userData.token;
       if (token) {
-        localStorage.setItem("jwt", token);
+        sessionStorage.setItem("jwt", token);
       }
 
-      localStorage.setItem("sessionId", String(getSessionId()));
+      sessionStorage.setItem("sessionId", String(getSessionId()));
 
       // ✅ PASS EVERYTHING TO APP STATE
       onLogin?.({

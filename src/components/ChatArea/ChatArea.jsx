@@ -5,7 +5,23 @@ import ChatInputBar from '../ChatInputBar/ChatInputBar'
 import { getAvatarColor } from '../../utils/avatarColor'
 import { useChatContext } from '../../context/ChatContext'
 
-function ChatArea({ activeChat, activeChatOnline, canAttachImage, onLogout, messages, typingForActiveChat, lastSeenMessageId = null, onOpenGallery, onMessageSent, onLoadOlder, onLoadNewer, onSeen, onTyping, onChatImageFile }) {
+function ChatArea({
+  activeChat,
+  activeChatOnline,
+  canAttachImage,
+  onLogout,
+  messages,
+  typingForActiveChat,
+  lastSeenMessageId = null,
+  onOpenGallery,
+  onOpenChatsList,
+  onMessageSent,
+  onLoadOlder,
+  onLoadNewer,
+  onSeen,
+  onTyping,
+  onChatImageFile,
+}) {
   const {avatarByUserId } = useChatContext()
   //From activeChat we are extracting for the current user info plus Ui display 2 paths for rendering empty chat or ChatConversation
   const correspondentName = activeChat?.correspondentName
@@ -15,6 +31,18 @@ function ChatArea({ activeChat, activeChatOnline, canAttachImage, onLogout, mess
   return (
     <div className="chat-area" role="main" aria-label={activeChat ? `Chat with ${correspondentName}` : 'Select a conversation'}>
       <header className="chat-area-header">
+        {onOpenChatsList && (
+          <button
+            type="button"
+            className="chat-area-menu-btn focus-ring"
+            onClick={onOpenChatsList}
+            aria-label="Open conversation list"
+          >
+            <svg viewBox="0 0 24 24" width="22" height="22" fill="currentColor" aria-hidden="true">
+              <path d="M4 6h16v2H4V6zm0 5h16v2H4v-2zm0 5h16v2H4v-2z" />
+            </svg>
+          </button>
+        )}
         <div className="chat-area-who">
           <div className="chat-area-avatar-wrap">
             <div
@@ -38,7 +66,7 @@ function ChatArea({ activeChat, activeChatOnline, canAttachImage, onLogout, mess
               className={`chat-area-status ${activeChatOnline ? 'chat-area-status--online' : 'chat-area-status--offline'}`}
               aria-live="polite"
             >
-              {activeChat ? (activeChatOnline ? 'Online' : 'Offline') : 'Pick a conversation from the left'}
+              {activeChat ? (activeChatOnline ? 'Online' : 'Offline') : 'Pick a conversation'}
             </span>
           </div>
         </div>

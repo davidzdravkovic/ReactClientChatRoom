@@ -1,3 +1,5 @@
+import { devLog } from '../utils/logger'
+
 /**
  * Pagination observability — disabled by default (no console noise).
  * Set to true to emit structured lines to the console during development.
@@ -17,7 +19,7 @@ export function logPagination(event, fields) {
     event,
     ...fields,
   }
-  console.log('[pagination]', JSON.stringify(line))
+  devLog('[pagination]', JSON.stringify(line))
 }
 
 /** Aligns with chatReducer message filtering for counts (for when logging is re-enabled). */

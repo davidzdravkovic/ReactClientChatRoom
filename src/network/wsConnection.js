@@ -1,3 +1,5 @@
+import { devError, devLog, devWarn } from '../utils/logger'
+
 /** Dev: direct to C++. Behind nginx: e.g. VITE_WS_URL=ws://localhost/ws */
 const WS_URL = import.meta.env.VITE_WS_URL || 'ws://localhost:12346/';
 
@@ -8,88 +10,75 @@ let hasReceivedSessionId = false;
 
 const messageListeners = new Set();
 const connectionCallback = new Set();
+const disconnectionListeners = new Set();
 
+function bindSocketHandlers(socket) {
+  const socketRef = socket
 
-export function connect() {
-  if (ws) return ws;
+  socket.onopen = () => {
+    if (ws !== socketRef) return
+    isReady = true
+    devLog('WebSocket connected')
+  }
 
-  ws = new WebSocket(WS_URL);
-  ws.binaryType = 'arraybuffer';
-
-  ws.onopen = () => {
-    isReady = true;
-    console.log('WebSocket connected');
-  };
-
-  ws.onmessage = async (event) => {
+  socket.onmessage = (event) => {
+    if (ws !== socketRef) return
     if (!hasReceivedSessionId) {
-      const idOrPromise = extractSessionId(event);
-      const id = idOrPromise instanceof Promise ? await idOrPromise : idOrPromise;
-
-      if (id != null) {
-        sessionId = id;
-        hasReceivedSessionId = true;
-        console.log('Session ID received:', id);
-        connectionCallback.forEach((cb)=>cb());
+      if (typeof event.data !== 'string') {
+        devWarn('Expected text SESSION_INIT frame, got:', event.data)
+        return
       }
-      return;
+      let msg
+      try {
+        msg = JSON.parse(event.data)
+      } catch {
+        return
+      }
+      if (msg.type === 'SESSION_INIT' && msg.sessionId != null) {
+        sessionId = Number(msg.sessionId)
+        hasReceivedSessionId = true
+        devLog('Session ID received:', sessionId)
+        connectionCallback.forEach((cb) => cb())
+      }
+      return
     }
 
-    handleGeneralMessage(event);
-  };
+    handleGeneralMessage(event)
+  }
 
-  ws.onclose = () => {
-    isReady = false;
-    ws = null;
-    console.log('WebSocket closed');
-  };
+  socket.onclose = () => {
+    if (ws !== socketRef) return
+    isReady = false
+    ws = null
+    sessionId = null
+    hasReceivedSessionId = false
+    disconnectionListeners.forEach((cb) => cb())
+    devLog('WebSocket closed')
+  }
 
-  ws.onerror = (err) => {
-    isReady = false;
-    console.error('WebSocket error', err);
-  };
-
+  socket.onerror = (err) => {
+    if (ws !== socketRef) return
+    isReady = false
+    devError('WebSocket error', err)
+  }
 }
 
-
-function extractSessionId(event) {
-  // Binary ArrayBuffer
-  if (event.data instanceof ArrayBuffer) {
-    const view = new DataView(event.data);
-    return view.getUint32(0, true); // little-endian
+/**
+ * Opens or reuses the WebSocket. Call after logout/server close so login/signup can get SESSION_INIT again.
+ * Old sockets in CLOSING/CLOSED do not block opening a new one; stale onclose cannot clear a newer socket.
+ */
+export function connect() {
+  if (ws) {
+    const state = ws.readyState
+    if (state === WebSocket.OPEN || state === WebSocket.CONNECTING) {
+      return ws
+    }
   }
 
-  // Blob
-  else if (event.data instanceof Blob) {
-    return new Promise((resolve) => {
-      const reader = new FileReader();
-      reader.onload = () => {
-        const view = new DataView(reader.result);
-        resolve(view.getUint32(0, true));
-      };
-      reader.readAsArrayBuffer(event.data);
-    });
-  }
-
-  // Uint8Array
-  else if (event.data instanceof Uint8Array) {
-    const buffer = event.data.buffer;
-    const view = new DataView(buffer);
-    return view.getUint32(0, true);
-  }
-
-  // String frame (likely from server sending text frame)
-  else if (typeof event.data === 'string') {
-    const encoder = new TextEncoder();
-    const buffer = encoder.encode(event.data).buffer;
-    const view = new DataView(buffer);
-    return view.getUint32(0, true);
-  }
-
-  else {
-    console.warn('Unknown first message type, cannot extract session ID', event.data);
-    return null;
-  }
+  const socket = new WebSocket(WS_URL)
+  ws = socket
+  bindSocketHandlers(socket)
+  return ws
 }
 
 // ---- Handle general messages ----
@@ -100,7 +89,7 @@ function handleGeneralMessage(event) {
 // ---- Send JSON over WebSocket (optional JWT; sessionId stays in the DTO) ----
 export function sendMessage(data, { attachToken = true } = {}) {
   if (ws && ws.readyState === WebSocket.OPEN) {
-    const token = localStorage.getItem('jwt');
+    const token = sessionStorage.getItem('jwt');
 
     let payload;
 
@@ -119,7 +108,7 @@ export function sendMessage(data, { attachToken = true } = {}) {
       typeof payload === 'string' ? payload : JSON.stringify(payload)
     );
   } else {
-    console.warn('WebSocket not open, cannot send message');
+    devWarn('WebSocket not open, cannot send message');
   }
 }
 
@@ -137,11 +126,17 @@ export function getIsReady() {
 export function getSessionId() {
   return sessionId;
 }
-export function subscribeConnection (callback) {
-  connectionCallback.add(callback);
-  if(hasReceivedSessionId) {
-     callback();
+export function subscribeConnection(callback) {
+  connectionCallback.add(callback)
+  if (hasReceivedSessionId) {
+    callback()
   }
-  
-  return () => connectionCallback.delete(callback);
+
+  return () => connectionCallback.delete(callback)
+}
+
+/** Fires when the socket closes or is replaced; use to clear UI and call connect() again. */
+export function subscribeDisconnection(callback) {
+  disconnectionListeners.add(callback)
+  return () => disconnectionListeners.delete(callback)
 }

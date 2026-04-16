@@ -22,6 +22,7 @@ export function useChatSubscription(
   chatSessionEnvRef,
   messageStorageRef,
   temporaryStorageRef,
+  prefetchUnknownPeerRef,
 ) {
   const dispatcherRef = useRef(dispatch)
   dispatcherRef.current = dispatch
@@ -45,7 +46,7 @@ export function useChatSubscription(
     const index = temporaryIds.findIndex((m) => m.temporaryId === tempId)
     if (index === -1) return
     temporaryIds.splice(index, 1)
-      console.log(`hereee udpdate ${serverMsg.content}`)
+      console.log(`hereee udpdate ${serverMsg.Content}`)
 
     appendLastMessageStorage(serverMsg)
 
@@ -84,10 +85,10 @@ export function useChatSubscription(
            if (otherUserName !== env?.peerUserName) return
   
 
-          if (env.state === 'newChat' && chatRoomId) {
+          if (env.state === 'newChat' && chatRoomId && activeChatRef.current) {
             env.chatRoomId = chatRoomId
             env.state = 'existingChat' //the user now can send normal messages + can send image messages
-            activeChatRef.current.chatRoomId = chatRoomId 
+            activeChatRef.current.chatRoomId = chatRoomId
             activeChatRef.current.otherUserId = otherUserId //updates the avatar
             dispatch({ type: 'UPDATE_ACTIVE_CHAT', payload: activeChatRef.current })
           }
@@ -223,17 +224,18 @@ export function useChatSubscription(
       switch (msgData.response) {
       
 
-        case 'RECENT_CHATROOM_RESPONSE':
-
-        //Made only entry for non existing chats maybe the user sent or received before this response !
-                for (let i = 0; i < msgData.data.length; ++i) {
-                const username = msgData.data[i].other_username
-                if (!messageStorageRef.current[username])  messageStorageRef.current[username] = [] 
-        
-                    }
-
-          dispatch({ type: 'RECENT_CHATROOM_RESPONSE', payload: msgData })
+        case 'RECENT_CHATROOM_RESPONSE': {
+          const recentRows = Array.isArray(msgData.data) ? msgData.data : []
+          for (let i = 0; i < recentRows.length; ++i) {
+            const username = recentRows[i].other_username
+            if (!messageStorageRef.current[username]) messageStorageRef.current[username] = []
+          }
+          dispatch({
+            type: 'RECENT_CHATROOM_RESPONSE',
+            payload: { ...msgData, data: recentRows },
+          })
           break
+        }
 
                    
         case 'FETCH_MESSAGES_RESPONSE': {
@@ -247,15 +249,45 @@ export function useChatSubscription(
               
              if (!validSession) return
 
-        
+              if (!Array.isArray(msgData.data)) {
+                msgData.data = []
+              }
+
+              const prefetch = prefetchUnknownPeerRef?.current
+              const pendingPrefetch =  prefetch && prefetch.peer === env.peerUserName && activeChatRef.current?.correspondentName !== env.peerUserName
+
+              // No active chat and not the prefetch handoff → orphan response (treat like wrong epoch).
+              if (!activeChatRef.current && !pendingPrefetch) {
+                return
+              }
+
+              if (pendingPrefetch) {
+                  activeChatRef.current = {
+                  correspondentName: env.peerUserName,
+                  chatRoomId: null,
+                  initialFetchDone: false,
+                  otherUserId: null,
+                }
+              }
 
               const peerUserId = msgData.data.find((m) => m.otherUserId != null)?.otherUserId ?? null
-              const barrier = msgData.data.find((m)=> m.endOfInitialSize != null)?.endOfInitialSize ?? null
+              const barrierRaw = msgData.data.find((m) => m.endOfInitialSize != null)?.endOfInitialSize ?? null
               const sizeOfData = msgData.data.length
+              const barrierNum = Number(barrierRaw)
+              const barrierOk =
+                barrierRaw != null &&
+                Number.isFinite(barrierNum) &&
+                barrierNum >= 0 &&
+                barrierNum <= sizeOfData
 
-             // Take lastMessages first, then slice the initial messages
-              const lastMessages = msgData.data.slice(barrier +1, sizeOfData)
-              msgData.data = msgData.data.slice(0, barrier)
+              // Take lastMessages first, then slice the initial messages (marker row at index barrierNum is excluded from both slices)
+              let lastMessages
+              if (barrierOk) {
+                lastMessages = msgData.data.slice(barrierNum + 1, sizeOfData)
+                msgData.data = msgData.data.slice(0, barrierNum)
+              } else {
+                lastMessages = []
+              }
               //Last messages from server payload are extracted in lastMessage
               //Cuase the last messages from the server can not be the only truth after read DB a user can receive or send temp messages
               //The reconciliation function merges them based on the message ID value.
@@ -267,7 +299,7 @@ export function useChatSubscription(
               }
 
     
-          if (!activeChatRef.current.initialFetchDone) {
+          if (activeChatRef.current && !activeChatRef.current.initialFetchDone) {
             let lastInitialFetch = true
             const chatRoomId = msgData.data.find((m) => m.chatroom_id != null)?.chatroom_id ?? null
             //EXISTINGCHAT
@@ -317,6 +349,9 @@ export function useChatSubscription(
             dispatch({ type: 'UPDATE_ACTIVE_CHAT', payload: activeChatRef.current })
               }
           }
+          if (pendingPrefetch) {
+            prefetchUnknownPeerRef.current = null
+          }
           //Dispatch is updating the message state can be updated by pagination and by writing 
           //Just writing needs a guard to check to update the state, Fetch updates to state are common 
           // in initial_view and they could happen in last_view 
@@ -324,7 +359,7 @@ export function useChatSubscription(
 
           if (env.pendingSeed) {
             env.pendingSeed = false
-            chatSessionEnvRef.current.chatView = `last_view`
+            env.chatView = `last_view`
             const stored = (messageStorageRef.current[env.peerUserName] ?? []).map(m => ({
               id: m.messageId,
               content: m.Content,
@@ -392,8 +427,16 @@ export function useChatSubscription(
           } 
           else if (msgData.response === `MESSAGE_ACK_RESPONSE`) {
             const otherUserName =msgData.data.find((m) => m.ReceiverUserName != null)?.ReceiverUserName ?? null
-            if(!activeChatRef.current.initialFetchDone && otherUserName === chatSessionEnvRef.current.peerUserName) {
-              chatSessionEnvRef.current.chatAcknowledge = true
+            {
+              const envAck = chatSessionEnvRef.current
+              if (
+                envAck &&
+                activeChatRef.current &&
+                !activeChatRef.current.initialFetchDone &&
+                otherUserName === envAck.peerUserName
+              ) {
+                envAck.chatAcknowledge = true
+              }
             }
             updateTempStorage(msgData.data, otherUserName)
             setUpIfFirstMessage(otherUserName, chatRoomid, otherUserId)
@@ -428,16 +471,52 @@ export function useChatSubscription(
         case 'SEEN_RESPONSE':
           dispatch({ type: 'SEEN_RESPONSE', payload: msgData })
           break
+
+        case 'PEER_USER_NOT_FOUND_RESPONSE': {
+          const env = chatSessionEnvRef.current
+          if (!env) break
+
+          const row = msgData.data?.[0] ?? {}
+          const echoedEpoch =row.chatIdentifier != null && row.chatIdentifier !== '' ? Number(row.chatIdentifier) : NaN
+        
+              if ( Number.isFinite(echoedEpoch) &&echoedEpoch > 0 &&   echoedEpoch !== env.conversationEpoch  )  break
+          
+
+          const failedPeer = (row.peerUsername != null ? String(row.peerUsername) : '').trim()
+          const peerLabel = failedPeer || String(env.peerUserName ?? '').trim()
+
+          env.pagination?.onFetchResponse()
+          prefetchUnknownPeerRef.current = null
+          chatSessionEnvRef.current = null
+          activeChatRef.current = null
+          dispatch({ type: 'SELECT_ACTIVE_CHAT', payload: null })
+
+          const reason =
+            row.error != null && String(row.error).trim() !== ''
+              ? String(row.error)
+              : `No user found${peerLabel ? ` named "${peerLabel}"` : ''}.`
+          dispatch({
+            type: 'SHOW_CHAT_ALERT',
+            message: reason,
+            variant: 'error',
+          })
+          break
+        }
         
         case 'CHATROOM_ID_RESPONSE': {
-          const otherUserName = msgData.data.find((m) => m.receiver_UserName != null) ?.receiver_UserName ?? null
+          if (!chatSessionEnvRef.current) return
+          if (!Array.isArray(msgData.data)) {
+            msgData.data = []
+          }
+          const otherUserName = msgData.data.find((m) => m.receiver_UserName != null)?.receiver_UserName ?? null
           const chatRoomId = msgData.data.find((m) => m.chatroom_id != null)?.chatroom_id ?? null
           const otherUserId = msgData.data.find((m) => m.receiver_id != null)?.receiver_id ?? null
 
-           if(!activeChatRef.current.initialFetchDone) {
-              chatSessionEnvRef.current.chatAcknowledge = true
-             }
-             setUpIfFirstMessage(otherUserName, chatRoomId, otherUserId)
+          const envRoom = chatSessionEnvRef.current
+          if (envRoom && activeChatRef.current && !activeChatRef.current.initialFetchDone) {
+            envRoom.chatAcknowledge = true
+          }
+          setUpIfFirstMessage(otherUserName, chatRoomId, otherUserId)
           break
         }
         

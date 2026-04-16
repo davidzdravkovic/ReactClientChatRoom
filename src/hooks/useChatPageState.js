@@ -5,8 +5,17 @@ import { runImageMessageUploadPhases } from '../network/imageMessageUpload'
 import { nextClientTemporaryId } from '../utils/nextClientTemporaryId'
 import { chatReducer, initialChatState } from '../reducers/chatReducer'
 import { ChatSessionEnvironment } from '../controllers/ChatSessionEnvironment'
+import { devError, devLog } from '../utils/logger'
 
 const FETCH_LIMIT = 14
+
+const SELF_CHAT_ALERT_MESSAGE = "You can't chat with yourself."
+
+function isOwnUsername(currentUserName, peerName) {
+  const me = currentUserName?.trim()
+  const peer = peerName?.trim()
+  return Boolean(me && peer && me === peer)
+}
 
 /**
  * Single hook that owns chat state (reducer), WS subscription, and all chat-specific
@@ -24,6 +33,7 @@ export function useChatPageState(currentUser) {
     lastSeenMessageIdByChat,
     fullScreenImageUrl,
     waitRecentChat,
+    chatAlert,
   } = state
 
   /** @type {React.MutableRefObject<Record<string, { messages: unknown[] }>>} */
@@ -36,6 +46,14 @@ export function useChatPageState(currentUser) {
   const bufferOfPendingMessagesRef = useRef({})
   const messageStorageRef = useRef({})
   const temporaryStorageRef = useRef({})
+  /** Prefetch for sidebar search (peer not in recent list): peer until FETCH or PEER_USER_NOT_FOUND. */
+  const prefetchUnknownPeerRef = useRef(null)
+
+  function isPrefetchingUnknownPeer() {
+    const p = prefetchUnknownPeerRef.current
+    if (!p) return false
+    return activeChatRef.current?.correspondentName !== chatSessionEnvRef.current?.peerUserName
+  }
 
   useEffect(() => {
     const chatRequest = createChatRoomDTO(currentUser.userId, getSessionId())
@@ -80,10 +98,11 @@ export function useChatPageState(currentUser) {
 
 
   const handleLoadOlder = useCallback(() => {
+    if (isPrefetchingUnknownPeer()) return
     const env = chatSessionEnvRef.current
     if (!env) return
     const oldestId = env.pagination.requestOlder(messages)
-    console.log(`the oldest id is ${oldestId}`)
+    devLog(`the oldest id is ${oldestId}`)
     if (oldestId == null) return
     const chat = activeChatRef.current
     if (!chat) return
@@ -100,6 +119,7 @@ export function useChatPageState(currentUser) {
   }, [messages, currentUser.userName])
 
   const handleLoadNewer = useCallback(() => {
+    if (isPrefetchingUnknownPeer()) return
     const env = chatSessionEnvRef.current
     if (!env) return
     const newestId = env.pagination.requestNewer(messages)
@@ -119,14 +139,15 @@ export function useChatPageState(currentUser) {
   }, [messages, currentUser.userName])
 
   const handleSeen = useCallback((messageId) => {
+    if (isPrefetchingUnknownPeer()) return
     // No seen until initial fetch has finished for this session
     const chat = activeChatRef.current
     if (chat?.initialFetchDone === false) {
-      console.log('Seen action before initial fetch for', chatSessionEnvRef.current?.peerUserName)
+      devLog('Seen action before initial fetch for', chatSessionEnvRef.current?.peerUserName)
       return
     }
     if (chatSessionEnvRef.current?.state === 'newChat') {
-      console.log('Seen action during newChat transition for', chatSessionEnvRef.current.peerUserName)
+      devLog('Seen action during newChat transition for', chatSessionEnvRef.current?.peerUserName)
       return
     }
     const pagination = chatSessionEnvRef.current?.pagination
@@ -138,20 +159,29 @@ export function useChatPageState(currentUser) {
   }, [currentUser])
 
   const handleMessageSent = useCallback((payload) => {
-    
     if(activeChatRef.current == null || currentUser == null) return 
+    if (isPrefetchingUnknownPeer()) return
+    if (isOwnUsername(payload.currenUsername, payload.correspondentName)) {
+      dispatch({
+        type: 'SHOW_CHAT_ALERT',
+        message: SELF_CHAT_ALERT_MESSAGE,
+        variant: 'error',
+      })
+      return
+    }
     if (activeChatRef.current.initialFetchDone === false) {
-      console.log('Message sent before initial fetch for', chatSessionEnvRef.current?.peerUserName)
+      devLog('Message sent before initial fetch for', chatSessionEnvRef.current?.peerUserName)
       return
     }
 
-//Always show the optimistic message
- 
-      const peerUsername = chatSessionEnvRef.current.peerUserName
-      if(!temporaryStorageRef.current[peerUsername]) temporaryStorageRef.current[peerUsername] = []
-      temporaryStorageRef.current[peerUsername].push(payload)
+    const sess = chatSessionEnvRef.current
+    if (!sess) return
 
-    
+//Always show the optimistic message
+
+      const peerUsername = sess.peerUserName
+      if (!temporaryStorageRef.current[peerUsername]) temporaryStorageRef.current[peerUsername] = []
+      temporaryStorageRef.current[peerUsername].push(payload)
 
       const optimistic = {
         id: `temp-${payload.temporaryId}`,
@@ -163,23 +193,22 @@ export function useChatPageState(currentUser) {
 
     //Transition to the last view 
     //All messages after the while the state is inFlight are just storing in temp Storage and released on first FETCH RESPONSE
-    if (chatSessionEnvRef.current.chatView === `initial`) {
-      if (!chatSessionEnvRef.current.pagination.inFlight) {
-        chatSessionEnvRef.current.chatView = `last_view`
+    if (sess.chatView === `initial`) {
+      if (!sess.pagination.inFlight) {
+        sess.chatView = `last_view`
         dispatch({ type: 'FETCH_MESSAGES_RESPONSE', payload: { data: [...(messageStorageRef.current[peerUsername] ?? [])] }, mergeMode: 'initial' })
         dispatch({ type: 'OPTIMISTIC_MESSAGE', payload: optimistic })
       } else {
-        chatSessionEnvRef.current.pendingSeed = true
+        sess.pendingSeed = true
       }
-      
     }
     else {
       dispatch({ type: 'OPTIMISTIC_MESSAGE', payload: optimistic })
     }
 
-     if(chatSessionEnvRef.current?.state === 'newChat') { 
-      if(chatSessionEnvRef.current.subState === `noFirstMessageSent`) {
-        console.log('First message sent for new chat with', chatSessionEnvRef.current.peerUserName)
+     if (sess.state === 'newChat') { 
+      if (sess.subState === `noFirstMessageSent`) {
+        devLog('First message sent for new chat with', sess.peerUserName)
         const req = createFirstMessageDTO (
           payload.currenUsername,
           payload.correspondentName,
@@ -189,11 +218,10 @@ export function useChatPageState(currentUser) {
           getSessionId(),
         )
          sendMessage(JSON.stringify(req))
-         chatSessionEnvRef.current.subState = `firstMessageSent`
+         sess.subState = `firstMessageSent`
          return
       }
-      else if(chatSessionEnvRef.current.subState === `firstMessageSent`) {
-    
+      else if (sess.subState === `firstMessageSent`) {
         const pendingByPeer = bufferOfPendingMessagesRef.current
         const key = payload.correspondentName
         if (!pendingByPeer[key]) pendingByPeer[key] = []
@@ -201,10 +229,9 @@ export function useChatPageState(currentUser) {
       }
       return
     }
-    else if(chatSessionEnvRef.current?.state === 'existingChat') {
-      console.log('Message sent for existing chat with', chatSessionEnvRef.current.peerUserName, 'chatRoomId:', activeChatRef.current.chatRoomId,payload.chatRoomId)
+    else if (sess.state === 'existingChat') {
+      devLog('Message sent for existing chat with', sess.peerUserName, 'chatRoomId:', activeChatRef.current?.chatRoomId, payload.chatRoomId)
 
-      
    const req  = createSendMessageStruct(
     payload.currenUsername,
     payload.correspondentName,
@@ -222,6 +249,7 @@ export function useChatPageState(currentUser) {
 
   const requestGalleryImages = useCallback(() => {
     if (!activeChat || !currentUser) return
+    if (activeChat.chatRoomId == null) return
     pendingGalleryRef.current = true
     const req = createFetchDTO(activeChat.chatRoomId, currentUser.userId, getSessionId())
     sendMessage(JSON.stringify(req))
@@ -231,17 +259,36 @@ export function useChatPageState(currentUser) {
     //Selecting chat by from recent chat LIST
     if (activeChatRef.current?.correspondentName === chat.correspondentName) return
 
+    prefetchUnknownPeerRef.current = null
+
+    if (isOwnUsername(currentUser?.userName, chat?.correspondentName)) {
+      dispatch({
+        type: 'SHOW_CHAT_ALERT',
+        message: SELF_CHAT_ALERT_MESSAGE,
+        variant: 'error',
+      })
+      return
+    }
+
     //If prev chat was newChat it removes the entry from messageStorageRef
         prevChatRemoveEntry () 
     chatSessionEnvRef.current = new ChatSessionEnvironment(chat.chatRoomId, chat.correspondentName)
     chat.initialFetchDone = false
     dispatch({ type: 'SELECT_ACTIVE_CHAT', payload: chat })
-  }, [])
+  }, [currentUser?.userName])
 
 
   const  selectChatByName = useCallback((correspondentName) => {
     //Selecting chat by SEARCH
     if (activeChatRef.current?.correspondentName === correspondentName) return
+    if (isOwnUsername(currentUser?.userName, correspondentName)) {
+      dispatch({
+        type: 'SHOW_CHAT_ALERT',
+        message: SELF_CHAT_ALERT_MESSAGE,
+        variant: 'error',
+      })
+      return
+    }
     //If prev chat was newChat it removes the entry from messageStorageRef
     prevChatRemoveEntry()
     const chat = chats.find((c) => c.correspondentName === correspondentName)
@@ -251,18 +298,24 @@ export function useChatPageState(currentUser) {
       selectChat(chat)
       return
     }
-    //The user is not fetched in the recent chats, or maybe the recent chats response is late or missing.
-    //There can be still existing chat with this user 
-      chatSessionEnvRef.current = new ChatSessionEnvironment(null, correspondentName)
-      dispatch({type: 'SELECT_ACTIVE_CHAT',
-        payload: {
-          correspondentName,
-          chatRoomId: null,
-          initialFetchDone: false,
-          otherUserId: null,
-        },
-      })
-  }, [chats])
+    // Not in recent list: keep visible active chat; prefetch with new env + epoch; commit on FETCH_MESSAGES_RESPONSE.
+    const peer = String(correspondentName).trim()
+    prefetchUnknownPeerRef.current = { peer }
+    chatSessionEnvRef.current = new ChatSessionEnvironment(null, peer)
+    sendMessage(
+      JSON.stringify(
+        createChatRetieve(
+          currentUser.userName,
+          peer,
+          FETCH_LIMIT,
+          0,
+          0,
+          getSessionId(),
+          chatSessionEnvRef.current.conversationEpoch,
+        ),
+      ),
+    )
+  }, [chats, currentUser?.userName, selectChat])
 
 
   const closeGallery = useCallback(() => {
@@ -281,8 +334,13 @@ export function useChatPageState(currentUser) {
     dispatch({ type: 'SET_COUNTER_FOR_PAGINATION' })
   }, [])
 
+  const clearChatAlert = useCallback(() => {
+    dispatch({ type: 'CLEAR_CHAT_ALERT' })
+  }, [])
+
   
  function onTyping (peerUserName, chatRoomId, typing) {
+  if (isPrefetchingUnknownPeer()) return
   if(chatSessionEnvRef.current.state !== `existingChat`) return
     if (!activeChat || !currentUser) return
 
@@ -301,10 +359,13 @@ export function useChatPageState(currentUser) {
   const handleChatImageFile = useCallback(
     async (file) => {
       if (!file || !currentUser?.userId) return
+      if (isPrefetchingUnknownPeer()) return
       const chat = activeChatRef.current
+      if (!chat) return
       if (chatSessionEnvRef.current?.state !== 'existingChat') return
 
       const env = chatSessionEnvRef.current
+      if (!env) return
       const peerUsername = env.peerUserName
       const clientId = nextClientTemporaryId()
 
@@ -335,7 +396,7 @@ export function useChatPageState(currentUser) {
         })
       } 
       catch (e) {
-        console.error('Chat image upload failed:', e)
+        devError('Chat image upload failed:', e)
       }
     },
     [currentUser?.userId, currentUser?.userName, dispatch],
@@ -352,6 +413,7 @@ export function useChatPageState(currentUser) {
       typingByChat,
       lastSeenMessageIdByChat,
       fullScreenImageUrl,
+      chatAlert,
     },
     actions: {
       selectChat,
@@ -365,6 +427,7 @@ export function useChatPageState(currentUser) {
       setFullscreenImage,
       clearFullscreenImage,
       setCounterPagination,
+      clearChatAlert,
       onTyping,
       handleChatImageFile,
     },
@@ -378,7 +441,7 @@ export function useChatPageState(currentUser) {
       optimisticMessagesByPeerRef,
       messageStorageRef,
       temporaryStorageRef,
-
+      prefetchUnknownPeerRef,
     },
   }
 }

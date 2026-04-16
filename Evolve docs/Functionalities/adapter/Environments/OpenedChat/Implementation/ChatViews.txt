@@ -35,8 +35,8 @@ Inserting can happen on 3 ways:
 2. Peer user is sending messages - MESSAGE_RESPONSE
 3. Current user is opening a chat INITIAL - FETCH_MESSAGE_RESPONSE
 
-
-The feature of pagination called #background pagination, is solving two problems:
+MATEA OD TUKA CITAJ !!! /// aktals - citaj reverse
+The feature of pagination called #BACKGROUND PAGINATION, is solving two problems:
 - messages correctness/consistency
 - reusability/optimisation
 

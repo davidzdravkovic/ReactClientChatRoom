@@ -25,6 +25,8 @@ Thumbs.db
 
 # Env (keep secrets out of git)
 .env
+.env.development
+.env.production
 .env.*.local
 
 # Vite

@@ -1,0 +1,49 @@
+HTTPS + WSS rollout (single hostname for app + WebSocket + /media/)
+=====================================================================
+
+Replace "chat.example.com" everywhere below with your real DNS name.
+Point an A record for that name to your VPS public IP.
+
+1) Firewall
+   sudo ufw allow 80/tcp
+   sudo ufw allow 443/tcp
+   (Hetzner Cloud: also allow 80/443 in the cloud firewall if you use it.)
+
+2) ACME webroot (used for certificate renewal)
+   sudo mkdir -p /var/www/certbot/.well-known/acme-challenge
+
+3) Phase 1 — HTTP only (so Let’s Encrypt can reach your site on port 80)
+   - Copy deploy/nginx-https-phase1.conf to the server.
+   - Replace chat.example.com with your hostname in that file.
+   - Disable/remove the old IP-only site if it still claims default_server on :80.
+   - sudo nginx -t && sudo systemctl reload nginx
+   - Open http://YOUR_HOST/ in a browser and confirm the app loads.
+
+4) Obtain certificate (webroot method; nginx keeps running)
+   sudo apt update
+   sudo apt install -y certbot
+   sudo certbot certonly --webroot -w /var/www/certbot -d YOUR_HOST --agree-tos -m YOUR_EMAIL --non-interactive
+   (Omit --non-interactive the first time if you prefer the prompts.)
+
+   Optional stronger DH params (only if nginx complains about ssl_dhparam):
+   sudo openssl dhparam -out /etc/letsencrypt/ssl-dhparams.pem 2048
+
+5) Phase 2 — TLS + redirect HTTP → HTTPS
+   - Copy deploy/nginx-chat-https.conf to the server (same path as your active site, e.g. /etc/nginx/sites-available/chat.conf).
+   - Replace chat.example.com and certificate paths if your live folder name differs.
+   - sudo nginx -t && sudo systemctl reload nginx
+
+6) React production env (on your PC), then rebuild and upload dist/
+   In .env.production:
+     VITE_WS_URL=wss://YOUR_HOST/ws
+     VITE_MEDIA_BASE=https://YOUR_HOST
+   Remove ALLOW_INSECURE_PROD_BUILD (do not set it to true).
+   npm run build
+   scp dist/* to /var/www/react-chat/dist/ and fix chmod on assets/ if needed.
+
+7) Test
+   https://YOUR_HOST/ — app loads
+   Sign in / WebSocket — works (wss)
+   Media uploads — still via https://YOUR_HOST/media/...
+
+Renewal: certbot installs a systemd timer; check: sudo systemctl list-timers | grep certbot

@@ -1,21 +1,59 @@
-/* Grid layout: sidebar | divider | main */
+/*
+ * Mobile-first: main chat is full width; conversation list is a slide-over drawer.
+ * Wide screens (min-width: 901px): classic grid sidebar | divider | main.
+ * This avoids phones that never hit max-width queries the same way as desktop.
+ */
 .chat-page {
   position: relative;
   z-index: 1;
   background: var(--bg);
-  display: grid;
-  grid-template-columns: 320px 1px 1fr;
-  grid-template-rows: 1fr;
+  display: block;
   height: 100vh;
-  min-height: 100vh;
   max-height: 100vh;
+  min-height: 100vh;
+  height: 100dvh;
+  max-height: 100dvh;
+  min-height: 100dvh;
   overflow: hidden;
+}
+
+.chat-page-backdrop {
+  display: none;
+  position: fixed;
+  inset: 0;
+  z-index: 25;
+  margin: 0;
+  padding: 0;
+  border: none;
+  background: rgba(0, 0, 0, 0.45);
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+}
+
+.chat-page--sidebar-open .chat-page-backdrop {
+  display: block;
 }
 
 .chat-page-sidebar-wrap {
   min-width: 0;
   overflow: hidden;
-  height: 100%;
+  position: fixed;
+  top: 0;
+  left: 0;
+  bottom: 0;
+  width: min(320px, 88vw);
+  max-width: 100%;
+  z-index: 30;
+  height: auto;
+  background: var(--bg);
+  box-shadow: 8px 0 24px rgba(0, 0, 0, 0.12);
+  transform: translateX(-102%);
+  transition: transform 0.22s ease-out;
+  padding-bottom: env(safe-area-inset-bottom, 0px);
+}
+
+.chat-page--sidebar-open .chat-page-sidebar-wrap {
+  transform: translateX(0);
 }
 
 .chat-page-main-wrap {
@@ -26,13 +64,58 @@
 }
 
 .chat-page-divider {
-  width: 1px;
-  background: linear-gradient(
-    180deg,
-    transparent 0%,
-    var(--border) 20%,
-    var(--border) 80%,
-    transparent 100%
-  );
-  opacity: 0.9;
+  display: none;
+}
+
+@media (min-width: 901px) {
+  .chat-page {
+    display: grid;
+    grid-template-columns: 320px 1px 1fr;
+    grid-template-rows: 1fr;
+  }
+
+  .chat-page-backdrop {
+    display: none !important;
+  }
+
+  .chat-page--sidebar-open .chat-page-backdrop {
+    display: none !important;
+  }
+
+  .chat-page-sidebar-wrap {
+    position: relative;
+    top: auto;
+    left: auto;
+    bottom: auto;
+    width: auto;
+    max-width: none;
+    z-index: 1;
+    height: 100%;
+    transform: none !important;
+    transition: none;
+    box-shadow: none;
+    background: transparent;
+    padding-bottom: 0;
+  }
+
+  .chat-page--sidebar-open .chat-page-sidebar-wrap {
+    transform: none !important;
+  }
+
+  .chat-page-divider {
+    display: block;
+    width: 1px;
+    background: linear-gradient(
+      180deg,
+      transparent 0%,
+      var(--border) 20%,
+      var(--border) 80%,
+      transparent 100%
+    );
+    opacity: 0.9;
+  }
+
+  .chat-page-main-wrap {
+    height: 100%;
+  }
 }

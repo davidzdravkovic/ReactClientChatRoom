@@ -1,8 +1,14 @@
 import { useState, useEffect } from 'react'
-import { connect } from './network/wsConnection'
+import { connect, sendMessage, getSessionId } from './network/wsConnection'
+import { createLogoutRequest } from './Dto/dto'
 import LoginPage from './pages/LoginPage'
 import SignUpPage from './pages/SignUpPage'
 import ChatPage from './pages/ChatPage'
+
+function clearSessionAuth() {
+  sessionStorage.removeItem('jwt')
+  sessionStorage.removeItem('sessionId')
+}
 
 function App() {
   const [page, setPage] = useState('login')
@@ -10,6 +16,16 @@ function App() {
 
   useEffect(() => {
     connect()
+  }, [])
+
+  useEffect(() => {
+    if (page === 'login' || page === 'signup') {
+      connect()
+    }
+  }, [page])
+
+  useEffect(() => {
+    return () => clearSessionAuth()
   }, [])
 
   useEffect(() => {
@@ -50,8 +66,12 @@ function App() {
       <ChatPage
         currentUser={currentUser}
         onLogout={() => {
-          localStorage.removeItem('jwt')
-          localStorage.removeItem('sessionId')
+          const token = sessionStorage.getItem('jwt')
+          const sid = getSessionId()
+          if (token && sid != null) {
+            sendMessage(JSON.stringify(createLogoutRequest(sid)))
+          }
+          clearSessionAuth()
           setCurrentUser(null)
           setPage('login')
         }}

@@ -135,7 +135,7 @@ document.getElementById('loginAllBtn').addEventListener('click', () => {
 
     const client = {
       idx, user,
-      ws: null, sessionId: null, userId: null,
+      ws: null, sessionId: null, userId: null, token: null,
       ready: false, sent: 0, acks: 0, recv: 0
     };
     clients.push(client);
@@ -153,7 +153,6 @@ function connectClient(c) {
   print('[' + user.username + '] Connecting...');
 
   const ws = new WebSocket(WS_URL);
-  ws.binaryType = 'arraybuffer';
   c.ws = ws;
   let hasSessionId = false;
 
@@ -163,14 +162,18 @@ function connectClient(c) {
 
   ws.onmessage = (event) => {
     if (!hasSessionId) {
-      let id = null;
-      if (event.data instanceof ArrayBuffer && event.data.byteLength >= 4) {
-        id = new DataView(event.data).getUint32(0, true);
-      } else if (typeof event.data === 'string' && event.data.length >= 4) {
-        const buf = new Uint8Array(event.data.length);
-        for (let i = 0; i < event.data.length; i++) buf[i] = event.data.charCodeAt(i) & 0xff;
-        id = new DataView(buf.buffer).getUint32(0, true);
+      if (typeof event.data !== 'string') {
+        setStatus(idx, 'dot-err', 'No session ID');
+        print('[' + user.username + '] Expected text SESSION_INIT');
+        return;
       }
+      let msg;
+      try { msg = JSON.parse(event.data); } catch (e) {
+        setStatus(idx, 'dot-err', 'No session ID');
+        print('[' + user.username + '] Invalid SESSION_INIT JSON');
+        return;
+      }
+      const id = msg.type === 'SESSION_INIT' && msg.sessionId != null ? Number(msg.sessionId) : null;
       if (id && id > 0) {
         c.sessionId = id;
         hasSessionId = true;
@@ -187,16 +190,21 @@ function connectClient(c) {
       return;
     }
 
-    let raw = event.data instanceof ArrayBuffer ? new TextDecoder().decode(event.data) : event.data;
+    let raw = typeof event.data === 'string' ? event.data : new TextDecoder().decode(event.data);
     let msg;
     try { msg = JSON.parse(raw); } catch { return; }
 
     if (msg.response === 'LOGIN_RESPONSE') {
       if (msg.status === 'SUCCESS') {
-        c.userId = msg.data[0].userId;
+        const row = msg.data && msg.data[0] ? msg.data[0] : {};
+        c.token = row.token != null && row.token !== '' ? String(row.token) : null;
+        c.userId = row.userId;
         c.ready = true;
         setStatus(idx, 'dot-ok', 'Ready');
-        print('[' + user.username + '] Logged in (userId=' + c.userId + ')');
+        const tokInfo = c.token
+          ? 'token=yes (' + c.token.length + ' chars)'
+          : 'token=(missing in response)';
+        print('[' + user.username + '] LOGIN OK userId=' + c.userId + ' — ' + tokInfo);
         checkAllReady();
       } else {
         setStatus(idx, 'dot-err', 'Login failed');
@@ -275,18 +283,23 @@ document.getElementById('sendAllBtn').addEventListener('click', () => {
 
   for (let i = 0; i < MESSAGE_COUNT; i++) {
     for (const c of clients) {
-      c.ws.send(JSON.stringify({
+      if (!c.token) {
+        print('[WARN] ' + c.user.username + ' has no JWT; MESSAGE_REQUEST sent without token');
+      }
+      const envelope = {
         SessionId: c.sessionId,
-        request: "MESSAGE_REQUEST",
+        request: 'MESSAGE_REQUEST',
         data: {
           senderUserName: c.user.username,
-          receiverUser: c.user.receiver,
-          content: "stress #" + i + " from " + c.user.username,
+          receiverUserName: c.user.receiver,
+          content: 'stress #' + i + ' from ' + c.user.username,
           senderId: c.userId,
           chatroom_id: c.user.chatroomId,
-          temporaryId: i
+          temporaryId: c.idx * 1000000 + i
         }
-      }));
+      };
+      if (c.token) envelope.token = c.token;
+      c.ws.send(JSON.stringify(envelope));
       c.sent++;
     }
   }

@@ -4,6 +4,7 @@ import {
   createUploadProfilePictureInit,
 } from '../Dto/dto'
 import { postProfilePictureCommit, putTempMediaBlob } from './mediaServer'
+import { devWarn } from '../utils/logger'
 
 function parseWsJson(event) {
   try {
@@ -58,7 +59,7 @@ export async function runProfilePictureUploadPhases(file, userId, sessionId) {
   const uploadId =
     initRow?.uploadId != null ? Number(initRow.uploadId) : NaN
   if (!initRow || !isApprovedFlag(initRow.approved) || Number.isNaN(uploadId)) {
-    console.warn('Profile upload init unexpected response:', initMsg)
+    devWarn('Profile upload init unexpected response:', initMsg)
     throw new Error('Profile upload init rejected')
   }
   const putOk = await putTempMediaBlob(uploadId, file, mimeType)

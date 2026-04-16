@@ -1,15 +1,17 @@
-import { useMemo } from 'react'
+import { useCallback, useEffect, useMemo, useState } from 'react'
 import './ChatPage.css'
 import { ChatSidebar } from '../../components/ChatSidebar/ChatSidebar'
 import ChatArea from '../../components/ChatArea/ChatArea'
 import ChatGallery from '../../components/ChatGallery/ChatGallery'
 import ImageLightbox from '../../components/ImageLightbox/ImageLightbox'
+import { ChatToast } from '../../components/ChatToast/ChatToast'
 import { useMediaLoader } from '../../hooks/useMediaLoader'
 import { useChatPageState } from '../../hooks/useChatPageState'
 import { useChatSubscription } from '../../hooks/useChatSubscription'
 import ChatContext from '../../context/ChatContext'
 
 function ChatPage({ currentUser, onLogout }) {
+  const [mobileSidebarOpen, setMobileSidebarOpen] = useState(false)
   const { state, actions, subscriptionDeps } = useChatPageState(currentUser)
   const {
     dispatch,
@@ -20,6 +22,7 @@ function ChatPage({ currentUser, onLogout }) {
     bufferOfPendingMessagesRef,
     messageStorageRef,
     temporaryStorageRef,
+    prefetchUnknownPeerRef,
   } = subscriptionDeps
 
   useChatSubscription(
@@ -32,6 +35,7 @@ function ChatPage({ currentUser, onLogout }) {
     chatSessionEnvRef,
     messageStorageRef,
     temporaryStorageRef,
+    prefetchUnknownPeerRef,
   )
 
   const {
@@ -44,6 +48,7 @@ function ChatPage({ currentUser, onLogout }) {
     typingByChat,
     lastSeenMessageIdByChat,
     fullScreenImageUrl,
+    chatAlert,
   } = state
 
   //This is not causing re-rendering so for now everything that updates those 2 fields have uprfront something that changes state
@@ -57,8 +62,8 @@ function ChatPage({ currentUser, onLogout }) {
   }, [activeChat?.correspondentName, chats])
 
   const {
-    selectChat,
-    selectChatByName,
+    selectChat: selectChatBase,
+    selectChatByName: selectChatByNameBase,
     handleLoadOlder,
     handleLoadNewer,
     handleSeen,
@@ -68,9 +73,45 @@ function ChatPage({ currentUser, onLogout }) {
     setFullscreenImage,
     clearFullscreenImage,
     setCounterPagination,
+    clearChatAlert,
     onTyping,
     handleChatImageFile,
   } = actions
+
+  const selectChat = useCallback(
+    (chat) => {
+      selectChatBase(chat)
+      setMobileSidebarOpen(false)
+    },
+    [selectChatBase],
+  )
+
+  const selectChatByName = useCallback(
+    (name) => {
+      selectChatByNameBase(name)
+      setMobileSidebarOpen(false)
+    },
+    [selectChatByNameBase],
+  )
+
+  useEffect(() => {
+    if (!mobileSidebarOpen) return undefined
+    const onKey = (e) => {
+      if (e.key === 'Escape') setMobileSidebarOpen(false)
+    }
+    window.addEventListener('keydown', onKey)
+    return () => window.removeEventListener('keydown', onKey)
+  }, [mobileSidebarOpen])
+
+  useEffect(() => {
+    const onResize = () => {
+      if (typeof window !== 'undefined' && window.innerWidth >= 901) {
+        setMobileSidebarOpen(false)
+      }
+    }
+    window.addEventListener('resize', onResize)
+    return () => window.removeEventListener('resize', onResize)
+  }, [])
 
   const {
     loadingMediaIds,
@@ -103,7 +144,17 @@ function ChatPage({ currentUser, onLogout }) {
 
   return (
     <ChatContext.Provider value={chatContextValue}>
-      <div className="chat-page">
+      <ChatToast alert={chatAlert} onDismiss={clearChatAlert} />
+      <div
+        className={`chat-page${mobileSidebarOpen ? ' chat-page--sidebar-open' : ''}`}
+      >
+        <button
+          type="button"
+          className="chat-page-backdrop"
+          aria-label="Close conversation list"
+          tabIndex={mobileSidebarOpen ? 0 : -1}
+          onClick={() => setMobileSidebarOpen(false)}
+        />
         <div className="chat-page-sidebar-wrap">
           <ChatSidebar
             chats={chats}
@@ -118,6 +169,7 @@ function ChatPage({ currentUser, onLogout }) {
         <div className="chat-page-divider" />
         <div className="chat-page-main-wrap">
           <ChatArea
+            onOpenChatsList={() => setMobileSidebarOpen(true)}
             onOpenGallery={requestGalleryImages}
             onLogout={onLogout}
             onMessageSent={handleMessageSent}
@@ -125,9 +177,13 @@ function ChatPage({ currentUser, onLogout }) {
             canAttachImage={canAttachImage}
             activeChatOnline={activeChatOnline}
             messages={messages}
-            typingForActiveChat={activeChat ? typingByChat[activeChat.chatRoomId] : null}
+            typingForActiveChat={
+              activeChat?.chatRoomId != null ? typingByChat[activeChat.chatRoomId] : null
+            }
             lastSeenMessageId={
-              activeChat ? (lastSeenMessageIdByChat[activeChat.chatRoomId] ?? null) : null
+              activeChat?.chatRoomId != null
+                ? (lastSeenMessageIdByChat[activeChat.chatRoomId] ?? null)
+                : null
             }
             onLoadOlder={handleLoadOlder}
             onLoadNewer={handleLoadNewer}

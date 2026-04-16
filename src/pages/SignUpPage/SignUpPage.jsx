@@ -2,10 +2,12 @@ import './SignUpPage.css'
 import { useState, useEffect } from 'react'
 import { createCreateStruct } from '../../Dto/dto'
 import {
+  connect,
   getSessionId,
   sendMessage,
   subscribeMessages,
   subscribeConnection,
+  subscribeDisconnection,
 } from '../../network/wsConnection'
 
 function SignUpPage({ onNavigateToLogin, onLogin }) {
@@ -13,11 +15,19 @@ function SignUpPage({ onNavigateToLogin, onLogin }) {
   const [connectionError, setConnectionError] = useState(false)
 
   useEffect(() => {
-    const unsubscribe = subscribeConnection(() => {
+    connect()
+    const unsubConn = subscribeConnection(() => {
       setConnection(true)
       setConnectionError(false)
     })
-    return () => unsubscribe()
+    const unsubDisc = subscribeDisconnection(() => {
+      setConnection(false)
+      connect()
+    })
+    return () => {
+      unsubConn()
+      unsubDisc()
+    }
   }, [])
 
   const handleSubmit = (e) => {
@@ -73,9 +83,9 @@ function SignUpPage({ onNavigateToLogin, onLogin }) {
         const userData = Array.isArray(msg.data) && msg.data[0] ? msg.data[0] : {}
         const token = userData.token
         if (token) {
-          localStorage.setItem('jwt', token)
+          sessionStorage.setItem('jwt', token)
         }
-        localStorage.setItem('sessionId', String(getSessionId()))
+        sessionStorage.setItem('sessionId', String(getSessionId()))
         onLogin?.({
           userName: userData.userName ?? username,
           fullName: userData.name ?? fullName,
